@@ -3,6 +3,7 @@ module lifx-dash
 go 1.25.0
 
 require (
+	fyne.io/fyne v1.4.3
 	fyne.io/fyne/v2 v2.6.3
 	github.com/alessio-palumbo/lifxlan-go v0.2.10
 )

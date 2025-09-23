@@ -2,12 +2,12 @@ package main
 
 import (
 	"lifx-dash/dashboard"
-	"log"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
 func main() {
@@ -16,17 +16,24 @@ func main() {
 	w := a.NewWindow("LIFX Dash")
 	w.Resize(fyne.NewSize(400, 600))
 
-	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(1 * time.Second))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer ctrl.Close()
+	// ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(1000 * time.Second))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer ctrl.Close()
+	ctrl := &controller.Controller{}
 
+	d0, _ := device.SerialFromHex("0xd073d5000000")
+	d1, _ := device.SerialFromHex("0xd073d5000001")
 	// Perform discovery
-	time.Sleep(2 * time.Second)
-	devices := ctrl.GetDevices()
+	// time.Sleep(2 * time.Second)
+	// devices := ctrl.GetDevices()
+	devices := []device.Device{
+		{Label: "Device0", Serial: d0},
+		{Label: "Device1", Serial: d1},
+	}
 
-	list, deviceWidgets := dashboard.BuildDashboard(ctrl, devices)
+	list, deviceWidgets := dashboard.BuildDashboard(w, ctrl, devices)
 	w.SetContent(list)
 
 	// Background refresh loop

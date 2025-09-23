@@ -12,7 +12,7 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
-func BuildDashboard(ctrl *controller.Controller, devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
+func BuildDashboard(w fyne.Window, ctrl *controller.Controller, devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
 	groups := groupDevices(devices)
 
 	deviceWidgets := make(map[device.Serial]*deviceView) // map by device ID
@@ -38,6 +38,7 @@ func BuildDashboard(ctrl *controller.Controller, devices []device.Device) (fyne.
 		var cards []fyne.CanvasObject
 		for _, d := range devs {
 			view := newDeviceView(ctrl, d)
+			view.label.SetParentWindow(w)
 			deviceWidgets[d.Serial] = view
 			cards = append(cards, view.content) //container.NewStack(view.Card))
 		}

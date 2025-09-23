@@ -2,7 +2,9 @@ package dashboard
 
 import (
 	"image/color"
+	"time"
 
+	"fyne.io/fyne/driver/desktop"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -17,6 +19,10 @@ type StatusLabel struct {
 	circle     *canvas.Circle
 	circleSize float32
 	container  *fyne.Container
+	tooltip    string
+	isHovered  bool
+	tooltipWin *widget.PopUp
+	parentWin  fyne.Window
 }
 
 // NewStatusLabel creates a new label with a status circle
@@ -33,7 +39,7 @@ func NewStatusLabel(d device.Device, circleColor color.Color) *StatusLabel {
 
 	// Create a container for the circle to ensure it gets proper space
 	circleContainer := container.NewWithoutLayout(s.circle)
-	circleContainer.Resize(fyne.NewSize(s.circleSize, s.circleSize))
+	circleContainer.Resize(s.circle.Size())
 
 	// Create container with horizontal layout and padding
 	spacer := canvas.NewRectangle(color.Transparent)
@@ -95,6 +101,73 @@ func (s *StatusLabel) SetCircleSize(size float32) {
 	s.circleSize = size
 	s.circle.Resize(fyne.NewSize(size, size))
 	s.Refresh()
+}
+
+// SetTooltip sets the tooltip text for the device serial
+func (s *StatusLabel) SetTooltip(tooltip string) {
+	s.tooltip = tooltip
+}
+
+// GetTooltip returns the current tooltip text
+func (s *StatusLabel) GetTooltip() string {
+	return s.tooltip
+}
+
+// MouseIn implements desktop.Hoverable interface
+func (s *StatusLabel) MouseIn(*desktop.MouseEvent) {
+	s.isHovered = true
+	if s.tooltip != "" && s.parentWin != nil {
+		// Show tooltip after a brief delay
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			if s.isHovered && s.tooltip != "" {
+				s.showTooltip()
+			}
+		}()
+	}
+}
+
+// MouseOut implements desktop.Hoverable interface
+func (s *StatusLabel) MouseOut() {
+	s.isHovered = false
+	s.hideTooltip()
+}
+
+// MouseMoved implements desktop.Hoverable interface
+func (s *StatusLabel) MouseMoved(*desktop.MouseEvent) {
+	// Keep hovering state active
+}
+
+// SetParentWindow sets the parent window for tooltip display
+func (s *StatusLabel) SetParentWindow(w fyne.Window) {
+	s.parentWin = w
+}
+
+// showTooltip displays a popup tooltip
+func (s *StatusLabel) showTooltip() {
+	if s.tooltipWin != nil {
+		s.tooltipWin.Hide()
+	}
+
+	tooltipLabel := widget.NewLabel(s.tooltip)
+	tooltipLabel.Wrapping = fyne.TextWrapWord
+
+	s.tooltipWin = widget.NewPopUp(
+		container.NewBorder(nil, nil, nil, nil, tooltipLabel),
+		s.parentWin.Canvas(),
+	)
+
+	// Position tooltip near the widget
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(s)
+	s.tooltipWin.ShowAtPosition(pos.Add(fyne.NewPos(0, s.Size().Height+5)))
+}
+
+// hideTooltip hides the tooltip popup
+func (s *StatusLabel) hideTooltip() {
+	if s.tooltipWin != nil {
+		s.tooltipWin.Hide()
+		s.tooltipWin = nil
+	}
 }
 
 // statusLabelRenderer implements fyne.WidgetRenderer
