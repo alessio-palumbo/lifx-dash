@@ -11,21 +11,26 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 )
 
 type deviceView struct {
-	content *fyne.Container
-	label   *StatusLabel
-	device  device.Device // local copy of the device
-	ctrl    *controller.Controller
+	content    *fyne.Container
+	label      *StatusLabel
+	brightness *Slider
+	device     device.Device
+	ctrl       *controller.Controller
 }
 
 func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d device.Device) *deviceView {
 	statusLabel := NewStatusLabel(d, parentWin)
+	sendFunc := func(msg *protocol.Message) error { return ctrl.Send(d.Serial, msg) }
+	brightnessSlider := NewSlider("Brightness", d.Color.Brightness, sendFunc)
 	view := &deviceView{
-		label:  statusLabel,
-		device: d,
-		ctrl:   ctrl,
+		label:      statusLabel,
+		brightness: brightnessSlider,
+		device:     d,
+		ctrl:       ctrl,
 	}
 
 	btn := widget.NewButton("Toggle", func() {
@@ -37,7 +42,7 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d device.
 		view.refreshUI()
 	})
 
-	view.content = container.NewVBox(statusLabel, btn)
+	view.content = container.NewVBox(statusLabel, brightnessSlider.content, btn)
 	return view
 }
 
