@@ -12,10 +12,10 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
-func BuildDashboard(ctrl *controller.Controller, devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
+func BuildDashboard(a fyne.App, w fyne.Window, ctrl *controller.Controller, devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
 	groups := groupDevices(devices)
 
-	deviceWidgets := make(map[device.Serial]*deviceView) // map by device ID
+	deviceWidgets := make(map[device.Serial]*deviceView)
 	var sections []fyne.CanvasObject
 
 	var sortedGroups []string
@@ -26,26 +26,23 @@ func BuildDashboard(ctrl *controller.Controller, devices []device.Device) (fyne.
 
 	for _, groupName := range sortedGroups {
 		devs := groups[groupName]
-		// section title
-		// title := widget.NewLabelWithStyle(groupName, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-		// title.SizeName = theme.SizeNameSubHeadingText
 		title := canvas.NewText(groupName, color.Color(color.RGBA{255, 0, 0, 255}))
 		title.Alignment = fyne.TextAlignLeading
 		title.TextStyle = fyne.TextStyle{Bold: true}
 		title.TextSize = 16
 
-		// grid of device widgets
 		var cards []fyne.CanvasObject
 		for _, d := range devs {
-			view := newDeviceView(ctrl, d)
-			deviceWidgets[d.Serial] = view
-			cards = append(cards, view.content) //container.NewStack(view.Card))
-		}
-		grid := container.NewGridWithColumns(6, cards...) // 2 columns
+			view := newDeviceView(w, ctrl, d)
+			view.label.SetClipboard(a.Clipboard())
 
-		// group VBox
+			deviceWidgets[d.Serial] = view
+			cards = append(cards, view.content)
+		}
+		grid := container.NewGridWithColumns(6, cards...)
+
 		sep := canvas.NewRectangle(color.RGBA{R: 100, G: 100, B: 100, A: 255})
-		sep.SetMinSize(fyne.NewSize(0, 10)) // height of 2 pixels, width expands in container
+		sep.SetMinSize(fyne.NewSize(0, 10))
 		header := widget.NewButton(groupName, func() {
 			if grid.Visible() {
 				grid.Hide()

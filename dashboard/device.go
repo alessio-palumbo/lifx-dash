@@ -20,8 +20,8 @@ type deviceView struct {
 	ctrl    *controller.Controller
 }
 
-func newDeviceView(ctrl *controller.Controller, d device.Device) *deviceView {
-	statusLabel := NewStatusLabel(d, color.RGBA{0, 0, 255, 255})
+func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d device.Device) *deviceView {
+	statusLabel := NewStatusLabel(d, parentWin)
 	view := &deviceView{
 		label:  statusLabel,
 		device: d,
@@ -29,17 +29,15 @@ func newDeviceView(ctrl *controller.Controller, d device.Device) *deviceView {
 	}
 
 	btn := widget.NewButton("Toggle", func() {
-		_ = toggle(ctrl, view.device)
+		if err := toggle(ctrl, view.device); err != nil {
+			return
+		}
 		// optimistic update of local copy
 		view.device.PoweredOn = !view.device.PoweredOn
 		view.refreshUI()
 	})
 
-	// bg := canvas.NewRectangle(color.RGBA{R: 62, G: 36, B: 191, A: 255}) // card-like background
-	// bg.SetMinSize(fyne.NewSize(150, 100))
-	// view.Content = container.NewStack(bg, content)
 	view.content = container.NewVBox(statusLabel, btn)
-
 	return view
 }
 
@@ -49,36 +47,18 @@ func (v *deviceView) Update(d device.Device) {
 }
 
 func (v *deviceView) refreshUI() {
-	v.label.SetText(deviceLabel(v.device))
-	v.label.UpdateStatus(deviceColorToRGBA(v.device))
+	v.label.SetText(v.device.Label)
+	v.label.UpdateStatus(deviceColorToRGBA(&v.device))
 }
 
-func deviceLabel(d device.Device) string {
-	return fmt.Sprintf("%s: %s", d.Label, printPower(d.PoweredOn))
-}
-
-func toggle(ctrl *controller.Controller, d device.Device) bool {
-	var err error
+func toggle(ctrl *controller.Controller, d device.Device) error {
 	if d.PoweredOn {
-		err = ctrl.Send(d.Serial, messages.SetPowerOff())
-	} else {
-		err = ctrl.Send(d.Serial, messages.SetPowerOn())
+		return ctrl.Send(d.Serial, messages.SetPowerOff())
 	}
-
-	if err != nil {
-		return d.PoweredOn
-	}
-	return !d.PoweredOn
+	return ctrl.Send(d.Serial, messages.SetPowerOn())
 }
 
-func printPower(b bool) string {
-	if b {
-		return "on"
-	}
-	return "off"
-}
-
-func deviceColorToRGBA(d device.Device) color.RGBA {
+func deviceColorToRGBA(d *device.Device) color.RGBA {
 	if !d.PoweredOn {
 		return color.RGBA{A: 255}
 	}
@@ -89,6 +69,16 @@ func deviceColorToRGBA(d device.Device) color.RGBA {
 	}
 	r, g, b := HSBToRGB(d.Color.Hue, d.Color.Saturation, d.Color.Brightness)
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+}
+
+func deviceInfo(d *device.Device) string {
+	return fmt.Sprintf("Serial: %s\n"+
+		"IP: %s\n"+
+		"ProductID: %d\n"+
+		"Group: %s\n"+
+		"Location: %s",
+		d.Serial, d.Address.IP.String(), d.ProductID, d.Group, d.Location,
+	)
 }
 
 func HSBToRGB(h, s, b float64) (int, int, int) {

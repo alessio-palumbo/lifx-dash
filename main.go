@@ -16,7 +16,7 @@ func main() {
 	w := a.NewWindow("LIFX Dash")
 	w.Resize(fyne.NewSize(400, 600))
 
-	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(1 * time.Second))
+	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(1000 * time.Second))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 	devices := ctrl.GetDevices()
 
-	list, deviceWidgets := dashboard.BuildDashboard(ctrl, devices)
+	list, deviceWidgets := dashboard.BuildDashboard(a, w, ctrl, devices)
 	w.SetContent(list)
 
 	// Background refresh loop
