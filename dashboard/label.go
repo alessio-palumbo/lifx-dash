@@ -15,45 +15,40 @@ import (
 // StatusLabel combines a label with a colored status circle and tooltip
 type StatusLabel struct {
 	widget.BaseWidget
-	text        string
-	circleColor color.Color
-	circleSize  float32
 
 	// UI components
-	label   *widget.Label
-	circle  *canvas.Circle
-	content *fyne.Container
+	label      *widget.Label
+	circle     *canvas.Circle
+	circleSize float32
+	content    *fyne.Container
 
 	// Info window
-	parentWin  fyne.Window
-	tooltipWin *widget.PopUp
-	showInfo   bool
+	parentWin fyne.Window
+	infoWin   *widget.PopUp
 
 	// Clipboard
-	serial    string
 	clipboard fyne.Clipboard
 	copiedWin *widget.PopUp
+	copyText  string
 }
 
 // NewStatusLabel creates a new status label widget
-func NewStatusLabel(d device.Device, parentWin fyne.Window) *StatusLabel {
+func NewStatusLabel(parentWin fyne.Window, d *device.Device) *StatusLabel {
 	s := &StatusLabel{
-		text:        d.Label,
-		circleColor: deviceColorToRGBA(&d),
-		circleSize:  14,
-		parentWin:   parentWin,
-		serial:      d.Serial.String(),
+		parentWin:  parentWin,
+		circleSize: 14,
+		copyText:   d.Serial.String(),
 	}
 
-	s.buildUI(&d)
+	s.buildUI(d)
 	s.ExtendBaseWidget(s)
 	return s
 }
 
 // buildUI constructs the internal UI components
 func (s *StatusLabel) buildUI(d *device.Device) {
-	s.label = widget.NewLabelWithStyle(s.text, fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	s.circle = canvas.NewCircle(s.circleColor)
+	s.label = widget.NewLabelWithStyle(d.Label, fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	s.circle = canvas.NewCircle(deviceColorToRGBA(d))
 	s.circle.Resize(fyne.NewSize(s.circleSize, s.circleSize))
 
 	// Create a container for the circle to ensure it gets proper space
@@ -67,50 +62,35 @@ func (s *StatusLabel) buildUI(d *device.Device) {
 	// Simple horizontal layout with automatic spacing
 	s.content = container.NewHBox(circleContainer, spacer, s.label)
 
-	tooltipLabel := widget.NewLabel(deviceInfo(d))
-	s.tooltipWin = widget.NewPopUp(tooltipLabel, s.parentWin.Canvas())
-	copiedLabel := widget.NewLabel("Serial copied!")
-	s.copiedWin = widget.NewPopUp(copiedLabel, s.parentWin.Canvas())
+	infoWidget := widget.NewLabel(deviceInfo(d))
+	s.infoWin = widget.NewPopUp(infoWidget, s.parentWin.Canvas())
+
+	copyWidget := widget.NewLabel("Serial copied!")
+	s.copiedWin = widget.NewPopUp(copyWidget, s.parentWin.Canvas())
 }
 
-func (s *StatusLabel) UpdateStatus(color color.Color) {
-	s.circleColor = color
+func (s *StatusLabel) UpdateStatus(text string, color color.Color) {
+	s.label.SetText(text)
 	s.circle.FillColor = color
 	s.circle.Refresh()
-}
-
-func (s *StatusLabel) SetText(text string) {
-	s.text = text
-	s.label.SetText(text)
-}
-
-func (s *StatusLabel) GetText() string {
-	return s.text
 }
 
 func (s *StatusLabel) SetClipboard(clipboard fyne.Clipboard) {
 	s.clipboard = clipboard
 }
 
+// Tapped shows the info window.
+// Note: If the window is already showing a tap will hide it behind the current
+// window without the need to track its current state.
 func (s *StatusLabel) Tapped(*fyne.PointEvent) {
-	if s.showInfo {
-		s.tooltipHide()
-		return
-	}
-
-	// Position below the widget
-	s.tooltipWin.ShowAtRelativePosition(fyne.NewPos(0, s.Size().Height+5), s)
-	s.showInfo = true
+	s.infoWin.ShowAtRelativePosition(fyne.NewPos(0, s.Size().Height+5), s)
 }
 
-func (s *StatusLabel) tooltipHide() {
-	s.tooltipWin.Hide()
-	s.showInfo = false
-	s.Refresh()
-}
-
+// TappedSecondary copies the set text to the system clipboard
+// and briefly shows a popup for user feedback.
 func (s *StatusLabel) TappedSecondary(*fyne.PointEvent) {
-	s.clipboard.SetContent(s.serial)
+	s.clipboard.SetContent(s.copyText)
+
 	// Position on top of the label on a slight left offset
 	s.copiedWin.ShowAtRelativePosition(fyne.NewPos(5, -5), s)
 	fyne.Do(func() {
@@ -119,8 +99,16 @@ func (s *StatusLabel) TappedSecondary(*fyne.PointEvent) {
 	})
 }
 
-func (s *StatusLabel) MouseIn(*desktop.MouseEvent)    {}
-func (s *StatusLabel) MouseOut()                      {}
+func (s *StatusLabel) MouseIn(*desktop.MouseEvent) {}
+
+// MoustOut hides the info windows with a slight delay.
+func (s *StatusLabel) MouseOut() {
+	fyne.Do(func() {
+		time.Sleep(200 * time.Millisecond)
+		s.infoWin.Hide()
+	})
+}
+
 func (s *StatusLabel) MouseMoved(*desktop.MouseEvent) {}
 
 // CreateRenderer implements fyne.Widget with custom positioning

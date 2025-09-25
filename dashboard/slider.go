@@ -2,35 +2,32 @@ package dashboard
 
 import (
 	"fmt"
-	"time"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
-	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
-	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 )
 
-type Slider struct {
-	label   *widget.Label
-	content *fyne.Container
-}
-
-func NewSlider(label string, v float64, sendFunc func(msg *protocol.Message) error) *Slider {
-	sliderLabel := widget.NewLabel(fmt.Sprintf("%s: %.0f%%", label, v))
-	slider := widget.NewSlider(1, 100)
+func NewSlider(labelFmt string, min, max, step, v float64, sendFunc func(v float64) error) *fyne.Container {
+	sliderLabel := widget.NewLabel(fmt.Sprintf(labelFmt, v))
+	slider := widget.NewSlider(min, max)
 	slider.Value = v
-	slider.Step = 1
+	slider.Step = step
+
+	// Assign to a local variable to avoid closure capturing
+	cb := sendFunc
 
 	slider.OnChanged = func(value float64) {
-		sliderLabel.SetText(fmt.Sprintf("%s: %.0f%%", label, value))
-		if err := sendFunc(messages.SetColor(nil, nil, &value, nil, time.Millisecond, 0)); err != nil {
-			// TODO Log error
+		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
+		if err := cb(value); err != nil {
+			log.Println(err)
 		}
 	}
 
-	return &Slider{
-		label:   sliderLabel,
-		content: container.NewVBox(sliderLabel, slider),
-	}
+	return NewHItemWithSideLabel(slider, sliderLabel)
+}
+
+func NewHItemWithSideLabel(item, label fyne.CanvasObject) *fyne.Container {
+	return container.NewBorder(nil, nil, nil, label, item)
 }

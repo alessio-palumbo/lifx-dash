@@ -3,38 +3,37 @@ package dashboard
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"math"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
-	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 )
 
 type deviceView struct {
-	content    *fyne.Container
-	label      *StatusLabel
-	brightness *Slider
-	device     device.Device
-	ctrl       *controller.Controller
+	content *fyne.Container
+	label   *StatusLabel
+	device  *device.Device
 }
 
-func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d device.Device) *deviceView {
-	statusLabel := NewStatusLabel(d, parentWin)
-	sendFunc := func(msg *protocol.Message) error { return ctrl.Send(d.Serial, msg) }
-	brightnessSlider := NewSlider("Brightness", d.Color.Brightness, sendFunc)
+func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device.Device) *deviceView {
+	statusLabel := NewStatusLabel(parentWin, d)
 	view := &deviceView{
-		label:      statusLabel,
-		brightness: brightnessSlider,
-		device:     d,
-		ctrl:       ctrl,
+		label:  statusLabel,
+		device: d,
 	}
 
+	builtInIcon := widget.NewIcon(theme.SettingsIcon())
 	btn := widget.NewButton("Toggle", func() {
 		if err := toggle(ctrl, view.device); err != nil {
+			log.Println(err)
 			return
 		}
 		// optimistic update of local copy
@@ -42,21 +41,53 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d device.
 		view.refreshUI()
 	})
 
-	view.content = container.NewVBox(statusLabel, brightnessSlider.content, btn)
+	brightnessSlider := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
+		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
+	})
+
+	settingsBtn := widget.NewButtonWithIcon("", builtInIcon.Resource, func() {
+		// Sliders for advanced controls
+		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
+			return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
+		})
+		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
+			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
+		})
+		kelvin := NewSlider("%.0f", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
+			k := uint16(v)
+			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
+		})
+
+		modalContent := container.NewVBox(
+			widget.NewLabel("Hue"),
+			hue,
+			widget.NewLabel("Saturation"),
+			sat,
+			widget.NewLabel("Kelvin"),
+			kelvin,
+		)
+
+		dialog.ShowCustom("Advanced Settings", "Close", modalContent, parentWin)
+	})
+
+	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(btn, settingsBtn)))
 	return view
 }
 
+func (v *deviceView) LastSeenAt() time.Time {
+	return v.device.LastSeenAt
+}
+
 func (v *deviceView) Update(d device.Device) {
-	v.device = d
+	v.device = &d
 	v.refreshUI()
 }
 
 func (v *deviceView) refreshUI() {
-	v.label.SetText(v.device.Label)
-	v.label.UpdateStatus(deviceColorToRGBA(&v.device))
+	v.label.UpdateStatus(v.device.Label, deviceColorToRGBA(v.device))
 }
 
-func toggle(ctrl *controller.Controller, d device.Device) error {
+func toggle(ctrl *controller.Controller, d *device.Device) error {
 	if d.PoweredOn {
 		return ctrl.Send(d.Serial, messages.SetPowerOff())
 	}

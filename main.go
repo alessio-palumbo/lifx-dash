@@ -14,9 +14,9 @@ func main() {
 	a := app.New()
 	a.Settings()
 	w := a.NewWindow("LIFX Dash")
-	w.Resize(fyne.NewSize(400, 600))
+	w.Resize(fyne.NewSize(800, 600))
 
-	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(1000 * time.Second))
+	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(2 * time.Second))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,14 +33,17 @@ func main() {
 	go func() {
 		// The ticker should not trigger too fast to avoid updating stale
 		// state when best-effort toggle state is applied.
-		ticker := time.NewTicker(4 * time.Second)
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			fyne.Do(func() {
 				latest := ctrl.GetDevices()
 				for _, d := range latest {
 					if view, ok := deviceWidgets[d.Serial]; ok {
-						view.Update(d)
+						// Only update device if the device has changed.
+						if !d.LastSeenAt.Equal(view.LastSeenAt()) {
+							view.Update(d)
+						}
 					}
 				}
 			})
