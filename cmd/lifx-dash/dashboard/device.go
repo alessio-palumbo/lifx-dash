@@ -30,8 +30,7 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 		device: d,
 	}
 
-	builtInIcon := widget.NewIcon(theme.SettingsIcon())
-	btn := widget.NewButton("Toggle", func() {
+	toggleBtn := widget.NewButton("Toggle", func() {
 		if err := toggle(ctrl, view.device); err != nil {
 			log.Println(err)
 			return
@@ -45,20 +44,21 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
 
-	settingsBtn := widget.NewButtonWithIcon("", builtInIcon.Resource, func() {
-		// Sliders for advanced controls
+	settingsBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
 		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
 			return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
 		})
 		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
 			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
 		})
-		kelvin := NewSlider("%.0f", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
+		kelvin := NewSlider("%.0fK", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
 			k := uint16(v)
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
 		})
 
+		header := container.NewCenter(widget.NewLabel("Colour Settings"))
 		modalContent := container.NewVBox(
+			header,
 			widget.NewLabel("Hue"),
 			hue,
 			widget.NewLabel("Saturation"),
@@ -67,10 +67,12 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			kelvin,
 		)
 
-		dialog.ShowCustom("Advanced Settings", "Close", modalContent, parentWin)
+		d := dialog.NewCustom("", "Close", modalContent, parentWin)
+		d.Resize(fyne.NewSize(300, d.MinSize().Height))
+		d.Show()
 	})
 
-	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(btn, settingsBtn)))
+	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(toggleBtn, settingsBtn)))
 	return view
 }
 
