@@ -1,0 +1,205 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xorg-dev \
+            libx11-dev \
+            libgl1-mesa-dev \
+            libglfw3-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            pkg-config
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=$(git describe --tags --always || echo dev)" >> $GITHUB_ENV
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+      - name: Build and package Linux
+        run: |
+          export GOFLAGS="-ldflags=-s -w \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Version=$VERSION \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Commit=$COMMIT \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.BuildTime=$BUILD_TIME"
+
+          OUTPUT_DIR="dist/lifx-dash-linux-${{ matrix.arch }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          fyne package \
+            -os linux \
+            -app-version "${VERSION#v}" \
+            -src ./cmd/lifx-dash \
+            -icon ../../assets/icon.png
+
+          unset GOFLAGS
+
+          # Extract the generated tarball (either tar.gz or tar.xz)
+          TARBALL=$(ls lifx-dash.tar.*)
+          tar -xf "$TARBALL" -C "$OUTPUT_DIR"
+          cp README.md LICENSE "$OUTPUT_DIR"
+
+          cd "$OUTPUT_DIR"
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            zip -r ../"lifx-dash-linux-amd64.zip" ./*
+          else
+            zip -r ../"lifx-dash-linux-arm64.zip" ./*
+          fi
+
+      - name: Upload Linux binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifx-dash-linux-${{ matrix.arch == 'x86_64' && 'amd64' || matrix.arch }}
+          path: dist/*
+
+  build-darwin:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=$(git describe --tags --always || echo dev)" >> $GITHUB_ENV
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+      - name: Build and package macOS
+        run: |
+          export GOFLAGS="-ldflags=-s -w \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Version=$VERSION \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Commit=$COMMIT \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.BuildTime=$BUILD_TIME"
+
+          OUTPUT_DIR="dist/lifx-dash-darwin-${{ matrix.arch }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          fyne package \
+            -os darwin \
+            -app-version "${VERSION#v}" \
+            -src ./cmd/lifx-dash \
+            -icon ../../assets/icon.png
+
+          unset GOFLAGS
+
+          mv lifx-dash.app "$OUTPUT_DIR"
+          cp README.md LICENSE "$OUTPUT_DIR"
+
+          cd "$OUTPUT_DIR"
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            ditto -c -k --sequesterRsrc . "../lifx-dash-darwin-amd64.zip"
+          else
+            ditto -c -k --sequesterRsrc . "../lifx-dash-darwin-arm64.zip"
+          fi
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifx-dash-darwin-${{ matrix.arch == 'x86_64' && 'amd64' || matrix.arch }}
+          path: dist/*
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=$(git describe --tags --always || echo dev)" >> $GITHUB_ENV
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+      - name: Build and package Windows
+        shell: pwsh
+        run: |
+          $env:GOFLAGS = "-ldflags=-s -w -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Version=$($env:VERSION) -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Commit=$($env:COMMIT) -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.BuildTime=$($env:BUILD_TIME)"
+
+          $OutputDir = "dist\lifx-dash-windows-amd64"
+          New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+
+          $AppVersion = $env:VERSION -replace '^v',''
+
+          fyne package `
+            -os windows `
+            -app-version $AppVersion `
+            -src ./cmd/lifx-dash `
+            -icon ../../assets/icon.png
+
+          Move-Item -Force ".\cmd\lifx-dash\lifx-dash.exe" $OutputDir
+          Copy-Item README.md, LICENSE $OutputDir
+          $Destination = "dist/lifx-dash-windows-amd64.zip"
+          if (Test-Path $Destination) { Remove-Item $Destination }
+          # Compress only the contents, not the folder itself
+          Get-ChildItem -Path $OutputDir -Recurse | Compress-Archive -DestinationPath $Destination
+          Remove-Item Env:GOFLAGS
+
+      - name: Upload Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifx-dash-windows-amd64
+          path: dist/*
+
+  release:
+    needs: [build-linux, build-darwin, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all zipped artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: dist/*.zip
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

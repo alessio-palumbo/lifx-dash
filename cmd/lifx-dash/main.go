@@ -16,7 +16,7 @@ func main() {
 	a := app.New()
 	a.Settings()
 	w := a.NewWindow("LIFX Dash")
-	w.SetTitle(fmt.Sprintf("LIFX Dash v%s (%s)", version.Version, version.Commit))
+	w.SetTitle(fmt.Sprintf("LIFX Dash %s (%s)", version.Version, version.Commit))
 	w.Resize(fyne.NewSize(800, 600))
 
 	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(2 * time.Second))
