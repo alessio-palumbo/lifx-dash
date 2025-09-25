@@ -1,4 +1,4 @@
-module lifx-dash
+module github.com/alessio-palumbo/lifx-dash
 
 go 1.25.0
 

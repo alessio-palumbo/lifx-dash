@@ -1,12 +1,12 @@
 package main
 
 import (
-	"lifx-dash/dashboard"
 	"log"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"github.com/alessio-palumbo/lifx-dash/cmd/lifx-dash/dashboard"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 )
 
