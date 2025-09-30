@@ -81,7 +81,7 @@ func (v *deviceView) LastSeenAt() time.Time {
 }
 
 func (v *deviceView) Update(d device.Device) {
-	v.device = &d
+	*v.device = d
 	v.refreshUI()
 }
 

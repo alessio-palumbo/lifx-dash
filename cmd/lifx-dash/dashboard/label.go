@@ -101,7 +101,7 @@ func (s *StatusLabel) TappedSecondary(*fyne.PointEvent) {
 
 func (s *StatusLabel) MouseIn(*desktop.MouseEvent) {}
 
-// MoustOut hides the info windows with a slight delay.
+// MouseOut hides the info windows with a slight delay.
 func (s *StatusLabel) MouseOut() {
 	fyne.Do(func() {
 		time.Sleep(200 * time.Millisecond)
