@@ -3,6 +3,7 @@ package dashboard
 import (
 	"image/color"
 	"slices"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -12,18 +13,101 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
-func BuildDashboard(a fyne.App, w fyne.Window, ctrl *controller.Controller, devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
+// Dashboard manages the UI and background refresh loop.
+type Dashboard struct {
+	app       fyne.App
+	win       fyne.Window
+	clipboard fyne.Clipboard
+
+	ctrl          *controller.Controller
+	devices       []device.Device
+	deviceWidgets map[device.Serial]*deviceView
+}
+
+func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
+	return &Dashboard{
+		win:       win,
+		clipboard: fyne.CurrentApp().Clipboard(),
+
+		ctrl:          ctrl,
+		deviceWidgets: make(map[device.Serial]*deviceView),
+	}
+}
+
+// Run starts the refresh loop and initializes the UI.
+func (d *Dashboard) Run() {
+	// Give the controller time to discover devices
+	time.Sleep(2 * time.Second)
+	d.refreshDevices()
+
+	// Start background refresh loop
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			d.refreshDevices()
+		}
+	}()
+}
+
+// refreshDevices fetches the latest devices and updates the dashboard if needed.
+func (d *Dashboard) refreshDevices() {
+	latest := d.ctrl.GetDevices()
+
+	// If the list has changed update the dashboard
+	if d.devicesChanged(latest) {
+		list, views := d.build(latest)
+
+		fyne.Do(func() {
+			d.win.SetContent(list)
+		})
+
+		d.devices = latest
+		d.deviceWidgets = views
+		// Dashboard has been refreshed, skip widgets update
+		return
+	}
+
+	fyne.Do(func() {
+		for _, dev := range latest {
+			if view, ok := d.deviceWidgets[dev.Serial]; ok {
+				// Update widgets only if device state has been refreshed
+				if !dev.LastSeenAt.Equal(view.LastSeenAt()) {
+					view.Update(dev)
+				}
+			}
+		}
+	})
+}
+
+// devicesChanged compares the current device list with the latest discovery result.
+// It returns true if the number of devices differs or if any device serial does not match,
+// indicating that the dashboard needs to be rebuilt.
+func (d *Dashboard) devicesChanged(latest []device.Device) bool {
+	if len(d.devices) != len(latest) {
+		return true
+	}
+	for i := range d.devices {
+		if d.devices[i].Serial != latest[i].Serial {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *Dashboard) build(devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
 	groups, sortedGroups := groupDevices(devices)
 	deviceWidgets := make(map[device.Serial]*deviceView)
 	var sections []fyne.CanvasObject
 
 	for _, groupName := range sortedGroups {
 		var cards []fyne.CanvasObject
-		for _, d := range groups[groupName] {
-			view := newDeviceView(w, ctrl, &d)
-			view.label.SetClipboard(a.Clipboard())
+		for _, device := range groups[groupName] {
+			view := newDeviceView(d.win, d.ctrl, &device)
+			view.label.SetClipboard(d.clipboard)
 
-			deviceWidgets[d.Serial] = view
+			deviceWidgets[device.Serial] = view
 			cards = append(cards, view.content)
 		}
 

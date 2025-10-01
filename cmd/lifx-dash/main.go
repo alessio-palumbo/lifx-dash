@@ -25,33 +25,8 @@ func main() {
 	}
 	defer ctrl.Close()
 
-	// Perform discovery
-	time.Sleep(2 * time.Second)
-	devices := ctrl.GetDevices()
-
-	list, deviceWidgets := dashboard.BuildDashboard(a, w, ctrl, devices)
-	w.SetContent(list)
-
-	// Background refresh loop
-	go func() {
-		// The ticker should not trigger too fast to avoid updating stale
-		// state when best-effort toggle state is applied.
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			fyne.Do(func() {
-				latest := ctrl.GetDevices()
-				for _, d := range latest {
-					if view, ok := deviceWidgets[d.Serial]; ok {
-						// Only update device if the device has changed.
-						if !d.LastSeenAt.Equal(view.LastSeenAt()) {
-							view.Update(d)
-						}
-					}
-				}
-			})
-		}
-	}()
+	dash := dashboard.NewDashboard(w, ctrl)
+	dash.Run()
 
 	w.ShowAndRun()
 }
