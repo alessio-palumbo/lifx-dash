@@ -15,7 +15,6 @@ import (
 
 // Dashboard manages the UI and background refresh loop.
 type Dashboard struct {
-	app       fyne.App
 	win       fyne.Window
 	clipboard fyne.Clipboard
 
@@ -36,17 +35,27 @@ func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
 
 // Run starts the refresh loop and initializes the UI.
 func (d *Dashboard) Run() {
-	// Give the controller time to discover devices
-	time.Sleep(2 * time.Second)
-	d.refreshDevices()
+	loadingDots := NewLoadingDots()
+	loadingDots.Run()
+	d.win.SetContent(container.NewCenter(container.NewHBox(widget.NewLabel("Discovering devices"), loadingDots.Object())))
 
-	// Start background refresh loop
 	go func() {
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 
+		noDevicesLabel := widget.NewLabel("No devices discovered: scanning")
+
 		for range ticker.C {
 			d.refreshDevices()
+			if len(d.devices) > 0 {
+				loadingDots.Stop()
+				continue
+			}
+
+			fyne.Do(func() {
+				loadingDots.Run()
+				d.win.SetContent(container.NewCenter(container.NewHBox(noDevicesLabel, loadingDots.Object())))
+			})
 		}
 	}()
 }
