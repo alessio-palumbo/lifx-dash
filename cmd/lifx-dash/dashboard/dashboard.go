@@ -13,6 +13,8 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
+const dashboardRefreshPeriod = 1 * time.Second
+
 // Dashboard manages the UI and background refresh loop.
 type Dashboard struct {
 	win       fyne.Window
@@ -40,7 +42,7 @@ func (d *Dashboard) Run() {
 	d.win.SetContent(container.NewCenter(container.NewHBox(widget.NewLabel("Discovering devices"), loadingDots.Object())))
 
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(dashboardRefreshPeriod)
 		defer ticker.Stop()
 
 		noDevicesLabel := widget.NewLabel("No devices discovered: scanning")
