@@ -2,7 +2,6 @@ name: Test
 
 on:
   push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -46,3 +45,57 @@ jobs:
 
       - name: Run tests with race detector
         run: go test -race ./...
+
+  build-darwin:
+    runs-on: macos-13
+    strategy:
+      matrix:
+        arch: [x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=v0.1.3" >> $GITHUB_ENV
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+      - name: Build and package macOS
+        run: |
+          export GOFLAGS="-ldflags=-s -w \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Version=$VERSION \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Commit=$COMMIT \
+            -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.BuildTime=$BUILD_TIME"
+
+          OUTPUT_DIR="dist/lifx-dash-darwin-13-${{ matrix.arch }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          fyne package \
+            -os darwin \
+            -app-version "${VERSION#v}" \
+            -src ./cmd/lifx-dash \
+            -icon ../../assets/icon.png
+
+          unset GOFLAGS
+
+          mv lifx-dash.app "$OUTPUT_DIR"
+          cp README.md LICENSE "$OUTPUT_DIR"
+
+          cd "$OUTPUT_DIR"
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            ditto -c -k --sequesterRsrc . "../lifx-dash-darwin-13-amd64.zip"
+          else
+            ditto -c -k --sequesterRsrc . "../lifx-dash-darwin-13-arm64.zip"
+          fi
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifx-dash-darwin-13-${{ matrix.arch == 'x86_64' && 'amd64' || matrix.arch }}
+          path: dist/*
