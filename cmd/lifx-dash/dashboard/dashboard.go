@@ -3,11 +3,14 @@ package dashboard
 import (
 	"image/color"
 	"slices"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
@@ -23,6 +26,8 @@ type Dashboard struct {
 	ctrl          *controller.Controller
 	devices       []device.Device
 	deviceWidgets map[device.Serial]*deviceView
+
+	searchEntry *widget.Entry
 }
 
 func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
@@ -32,6 +37,8 @@ func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
 
 		ctrl:          ctrl,
 		deviceWidgets: make(map[device.Serial]*deviceView),
+
+		searchEntry: widget.NewEntry(),
 	}
 }
 
@@ -39,6 +46,10 @@ func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
 func (d *Dashboard) Run() {
 	loadingDots := NewLoadingDots()
 	loadingDots.Run()
+
+	d.searchEntry.PlaceHolder = "Search by Label/Serial/Group..."
+	d.searchEntry.OnChanged = func(s string) { fyne.Do(func() { d.refreshDevices(true) }) }
+
 	d.win.SetContent(container.NewCenter(container.NewHBox(widget.NewLabel("Discovering devices"), loadingDots.Object())))
 
 	go func() {
@@ -48,7 +59,7 @@ func (d *Dashboard) Run() {
 		noDevicesLabel := widget.NewLabel("No devices discovered: scanning")
 
 		for range ticker.C {
-			d.refreshDevices()
+			d.refreshDevices(false)
 			if len(d.devices) > 0 {
 				loadingDots.Stop()
 				continue
@@ -63,15 +74,16 @@ func (d *Dashboard) Run() {
 }
 
 // refreshDevices fetches the latest devices and updates the dashboard if needed.
-func (d *Dashboard) refreshDevices() {
+func (d *Dashboard) refreshDevices(force bool) {
 	latest := d.ctrl.GetDevices()
 
 	// If the list has changed update the dashboard
-	if d.devicesChanged(latest) {
+	if force || d.devicesChanged(latest) {
 		list, views := d.build(latest)
 
 		fyne.Do(func() {
 			d.win.SetContent(list)
+			d.win.Canvas().Focus(d.searchEntry)
 		})
 
 		d.devices = latest
@@ -108,7 +120,7 @@ func (d *Dashboard) devicesChanged(latest []device.Device) bool {
 }
 
 func (d *Dashboard) build(devices []device.Device) (fyne.CanvasObject, map[device.Serial]*deviceView) {
-	groups, sortedGroups := groupDevices(devices)
+	groups, sortedGroups := groupDevices(d.filteredDevices(devices))
 	deviceWidgets := make(map[device.Serial]*deviceView)
 	var sections []fyne.CanvasObject
 
@@ -137,7 +149,25 @@ func (d *Dashboard) build(devices []device.Device) (fyne.CanvasObject, map[devic
 		sections = append(sections, container.NewVBox(header, grid, sep))
 	}
 
-	return container.NewVScroll(container.NewVBox(sections...)), deviceWidgets
+	scrollable := container.NewVScroll(container.NewVBox(sections...))
+	return container.NewBorder(newSearchBar(d.searchEntry), nil, nil, nil, scrollable), deviceWidgets
+}
+
+func (d *Dashboard) filteredDevices(devices []device.Device) []device.Device {
+	term := strings.TrimSpace(strings.ToLower(d.searchEntry.Text))
+	if term == "" {
+		return devices
+	}
+
+	var out []device.Device
+	for _, dev := range devices {
+		if strings.Contains(strings.ToLower(dev.Label), term) ||
+			strings.Contains(strings.ToLower(dev.Group), term) ||
+			strings.Contains(strings.ToLower(dev.Serial.String()), term) {
+			out = append(out, dev)
+		}
+	}
+	return out
 }
 
 func groupDevices(devices []device.Device) (map[string][]device.Device, []string) {
@@ -157,4 +187,34 @@ func groupDevices(devices []device.Device) (map[string][]device.Device, []string
 
 	slices.Sort(sortedGroups)
 	return groups, sortedGroups
+}
+
+func newSearchBar(entry *widget.Entry) fyne.CanvasObject {
+	var icon fyne.Resource
+	if len(entry.Text) == 0 {
+		icon = theme.SearchIcon()
+	} else {
+		icon = theme.CancelIcon()
+	}
+
+	buttonIcon := widget.NewButtonWithIcon("", icon, nil)
+	buttonIcon.OnTapped = func() {
+		entry.SetText("")
+		buttonIcon.SetIcon(theme.SearchIcon())
+	}
+	iconContainer := container.NewCenter(buttonIcon)
+
+	search := container.NewBorder(
+		layout.NewSpacer(),
+		layout.NewSpacer(),
+		iconContainer, nil,
+		entry,
+	)
+
+	sep := canvas.NewRectangle(color.RGBA{R: 50, G: 100, B: 100, A: 255})
+	sep.SetMinSize(fyne.NewSize(0, 10))
+	return container.NewVBox(
+		search,
+		sep,
+	)
 }
