@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -14,19 +15,31 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
+	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
 )
 
 type deviceView struct {
 	content *fyne.Container
 	label   *StatusLabel
 	device  *device.Device
+
+	mu            sync.RWMutex
+	internalColor *device.Color
+	cells         []*ZoneCell
 }
 
 func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device.Device) *deviceView {
 	statusLabel := NewStatusLabel(parentWin, d)
 	view := &deviceView{
-		label:  statusLabel,
-		device: d,
+		label:         statusLabel,
+		device:        d,
+		internalColor: &device.Color{},
+	}
+	*view.internalColor = d.Color
+
+	if d.Type == device.DeviceTypeSwitch {
+		view.content = container.NewPadded(container.NewVBox(statusLabel))
+		return view
 	}
 
 	toggleBtn := widget.NewButton("Toggle", func() {
@@ -40,18 +53,22 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 	})
 
 	brightnessSlider := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
+		view.setInternalColor(func(c *device.Color) { c.Brightness = v })
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
 
 	settingsBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
 		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
+			view.setInternalColor(func(c *device.Color) { c.Hue = v })
 			return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
 		})
 		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
+			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
 			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
 		})
 		kelvin := NewSlider("%.0fK", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
 			k := uint16(v)
+			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
 		})
 
@@ -66,8 +83,36 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			kelvin,
 		)
 
-		d := dialog.NewCustom("", "Close", modalContent, parentWin)
-		d.Resize(fyne.NewSize(300, d.MinSize().Height))
+		if d.LightType == device.LightTypeMatrix {
+			width, height := d.MatrixProperties.Width, d.MatrixProperties.Height
+			matrixSize := width * height
+			view.cells = make([]*ZoneCell, matrixSize)
+			grid := container.NewGridWithColumns(width)
+
+			for i := range matrixSize {
+				cell := NewZoneCell(func() device.Color { return view.getInternalColor() })
+				view.cells[i] = cell
+				grid.Add(cell)
+			}
+
+			applyBtn := widget.NewButton("Apply Matrix", func() {
+				var colors [64]packets.LightHsbk
+				for i, c := range view.cells {
+					if c.Selected {
+						colors[i] = c.SelectedColor.ToDeviceColor()
+					}
+				}
+
+				ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, width, colors, time.Millisecond))
+			})
+
+			modalContent.Add(widget.NewLabel("Matrix Grid"))
+			modalContent.Add(grid)
+			modalContent.Add(applyBtn)
+		}
+
+		d := dialog.NewCustom("", "Close", container.NewScroll(container.NewPadded(modalContent)), parentWin)
+		d.Resize(fyne.NewSize(300, 500))
 		d.Show()
 	})
 
@@ -88,6 +133,18 @@ func (v *deviceView) refreshUI() {
 	v.label.UpdateStatus(v.device.Label, deviceColorToRGBA(v.device))
 }
 
+func (v *deviceView) getInternalColor() device.Color {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return *v.internalColor
+}
+
+func (v *deviceView) setInternalColor(f func(*device.Color)) {
+	v.mu.Lock()
+	f(v.internalColor)
+	v.mu.Unlock()
+}
+
 func toggle(ctrl *controller.Controller, d *device.Device) error {
 	if d.PoweredOn {
 		return ctrl.Send(d.Serial, messages.SetPowerOff())
@@ -99,12 +156,15 @@ func deviceColorToRGBA(d *device.Device) color.RGBA {
 	if !d.PoweredOn {
 		return color.RGBA{A: 255}
 	}
+	return colorToRGBA(d.Color)
+}
 
-	if d.Color.Saturation == 0 {
-		r, g, b := d.Color.KelvinToRGB()
+func colorToRGBA(c device.Color) color.RGBA {
+	if c.Saturation == 0 {
+		r, g, b := c.KelvinToRGB()
 		return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
 	}
-	r, g, b := d.Color.HSBToRGB()
+	r, g, b := c.HSBToRGB()
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
 }
 
