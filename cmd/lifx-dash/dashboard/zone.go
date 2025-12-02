@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"image/color"
 
 	"fyne.io/fyne/v2"
@@ -21,20 +22,42 @@ type ZoneCell struct {
 
 	rect   *canvas.Rectangle
 	border *canvas.Rectangle
+
+	infoWin           *widget.PopUp
+	updateWidgetColor func(*device.Color)
 }
 
-func NewZoneCell(onTap func() device.Color) *ZoneCell {
-	z := &ZoneCell{SelectedColor: &device.Color{}, OnTapped: onTap}
+func NewZoneCell(parentWin fyne.Window, onTap func() device.Color) *ZoneCell {
+	infoWidget := widget.NewLabel(colorToLabel(&device.Color{}))
+	z := &ZoneCell{
+		SelectedColor: &device.Color{},
+		OnTapped:      onTap,
+		infoWin:       widget.NewPopUp(infoWidget, parentWin.Canvas()),
+		updateWidgetColor: func(c *device.Color) {
+			infoWidget.SetText(colorToLabel(c))
+		},
+	}
 	z.ExtendBaseWidget(z)
 	return z
 }
 
 func (z *ZoneCell) Tapped(_ *fyne.PointEvent) {
 	z.Selected = !z.Selected
-	if z.OnTapped != nil {
+	if z.Selected {
 		*z.SelectedColor = z.OnTapped()
+	} else {
+		*z.SelectedColor = device.Color{}
 	}
+	z.updateWidgetColor(z.SelectedColor)
 	z.Refresh()
+}
+
+func (z *ZoneCell) TappedSecondary(*fyne.PointEvent) {
+	if z.Visible() {
+		z.infoWin.ShowAtRelativePosition(fyne.NewPos(0, z.Size().Height+5), z)
+	} else {
+		z.infoWin.Hide()
+	}
 }
 
 func (z *ZoneCell) CreateRenderer() fyne.WidgetRenderer {
@@ -79,4 +102,8 @@ func colorWithAdjustedContrast(c *device.Color) device.Color {
 	color := *c
 	color.Brightness = max(color.Brightness, minContrastBrightness)
 	return color
+}
+
+func colorToLabel(c *device.Color) string {
+	return fmt.Sprintf("H:%.0f,S:%.0f,B:%.0f,K:%d", c.Hue, c.Saturation, c.Brightness, c.Kelvin)
 }

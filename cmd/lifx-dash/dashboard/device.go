@@ -90,21 +90,37 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			grid := container.NewGridWithColumns(width)
 
 			for i := range matrixSize {
-				cell := NewZoneCell(func() device.Color { return view.getInternalColor() })
+				cell := NewZoneCell(parentWin, func() device.Color { return view.getInternalColor() })
 				view.cells[i] = cell
 				grid.Add(cell)
 			}
 
-			applyBtn := widget.NewButton("Apply Matrix", func() {
-				var colors [64]packets.LightHsbk
-				for i, c := range view.cells {
-					if c.Selected {
-						colors[i] = c.SelectedColor.ToDeviceColor()
+			applyBtnLabel := "Apply Matrix"
+			applyBtn := NewButton(
+				applyBtnLabel,
+				func() {
+					var colors [64]packets.LightHsbk
+					for i, c := range view.cells {
+						if c.Selected {
+							colors[i] = c.SelectedColor.ToDeviceColor()
+						}
 					}
-				}
 
-				ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, width, colors, time.Millisecond))
-			})
+					ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, width, colors, time.Millisecond))
+				},
+				func(b *Button) {
+					var colors []string
+					for _, c := range view.cells {
+						colors = append(colors, colorToLabel(c.SelectedColor))
+					}
+					fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
+					b.SetText("Matrix Copied!")
+					fyne.Do(func() {
+						time.Sleep(400 * time.Millisecond)
+						b.SetText(applyBtnLabel)
+					})
+				},
+			)
 
 			modalContent.Add(widget.NewLabel("Matrix Grid"))
 			modalContent.Add(grid)
