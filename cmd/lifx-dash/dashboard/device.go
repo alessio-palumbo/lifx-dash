@@ -189,7 +189,8 @@ func deviceInfo(d *device.Device) string {
 		"IP: %s\n"+
 		"ProductID: %d\n"+
 		"Group: %s\n"+
-		"Location: %s",
-		d.Serial, d.Address.IP.String(), d.ProductID, d.Group, d.Location,
+		"Location: %s\n"+
+		"RSSI: %s",
+		d.Serial, d.Address.IP.String(), d.ProductID, d.Group, d.Location, d.WifiRSSI,
 	)
 }
