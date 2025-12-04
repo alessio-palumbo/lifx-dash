@@ -83,21 +83,12 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			kelvin,
 		)
 
-		if d.LightType == device.LightTypeMatrix {
-			width, height := d.MatrixProperties.Width, d.MatrixProperties.Height
-			matrixSize := width * height
-			view.cells = make([]*ZoneCell, matrixSize)
-			grid := container.NewGridWithColumns(width)
-
-			for i := range matrixSize {
-				cell := NewZoneCell(parentWin, func() device.Color { return view.getInternalColor() })
-				view.cells[i] = cell
-				grid.Add(cell)
-			}
-
-			applyBtnLabel := "Apply Matrix"
-			applyBtn := NewButton(
-				applyBtnLabel,
+		switch d.LightType {
+		case device.LightTypeMatrix:
+			nZones := d.MatrixProperties.Width * d.MatrixProperties.Height
+			grid := newZonesGrid(parentWin, view, nZones, d.MatrixProperties.Width)
+			applyBtn := newApplyZonesButton(
+				view.cells,
 				func() {
 					var colors [64]packets.LightHsbk
 					for i, c := range view.cells {
@@ -106,23 +97,32 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 						}
 					}
 
-					ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, width, colors, time.Millisecond))
-				},
-				func(b *Button) {
-					var colors []string
-					for _, c := range view.cells {
-						colors = append(colors, colorToLabel(c.SelectedColor))
-					}
-					fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
-					b.SetText("Matrix Copied!")
-					fyne.Do(func() {
-						time.Sleep(400 * time.Millisecond)
-						b.SetText(applyBtnLabel)
-					})
+					ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, d.MatrixProperties.Width, colors, time.Millisecond))
 				},
 			)
 
-			modalContent.Add(widget.NewLabel("Matrix Grid"))
+			modalContent.Add(widget.NewLabel("Matrix"))
+			modalContent.Add(grid)
+			modalContent.Add(applyBtn)
+		case device.LightTypeMultiZone:
+			grid := newZonesGrid(parentWin, view, len(d.MultizoneProperties.Zones), 8)
+			applyBtn := newApplyZonesButton(
+				view.cells,
+				func() {
+					colors := make([]packets.LightHsbk, len(view.cells))
+					for i, c := range view.cells {
+						if c.Selected {
+							colors[i] = c.SelectedColor.ToDeviceColor()
+						}
+					}
+					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
+					for _, msg := range msgs {
+						ctrl.Send(d.Serial, msg)
+					}
+				},
+			)
+
+			modalContent.Add(widget.NewLabel("Zones"))
 			modalContent.Add(grid)
 			modalContent.Add(applyBtn)
 		}
@@ -192,5 +192,37 @@ func deviceInfo(d *device.Device) string {
 		"Location: %s\n"+
 		"RSSI: %s",
 		d.Serial, d.Address.IP.String(), d.ProductID, d.Group, d.Location, d.WifiRSSI,
+	)
+}
+
+func newZonesGrid(parentWin fyne.Window, view *deviceView, nZones, gridWidth int) *fyne.Container {
+	view.cells = make([]*ZoneCell, nZones)
+	grid := container.NewGridWithColumns(gridWidth)
+
+	for i := range nZones {
+		cell := NewZoneCell(parentWin, func() device.Color { return view.getInternalColor() })
+		view.cells[i] = cell
+		grid.Add(cell)
+	}
+
+	return grid
+}
+func newApplyZonesButton(cells []*ZoneCell, onTap func()) *Button {
+	label := "Apply Zones"
+	return NewButton(
+		label,
+		onTap,
+		func(b *Button) {
+			var colors []string
+			for _, c := range cells {
+				colors = append(colors, colorToLabel(c.SelectedColor))
+			}
+			fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
+			b.SetText("Zones Copied!")
+			fyne.Do(func() {
+				time.Sleep(400 * time.Millisecond)
+				b.SetText(label)
+			})
+		},
 	)
 }
