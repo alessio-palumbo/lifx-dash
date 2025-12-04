@@ -12,25 +12,32 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 )
 
 const dashboardRefreshPeriod = 1 * time.Second
+
+// Controller is an interface that implements lifxlan-go Controller's
+// public method.
+type Controller interface {
+	GetDevices() []device.Device
+	Send(serial device.Serial, msg *protocol.Message) error
+}
 
 // Dashboard manages the UI and background refresh loop.
 type Dashboard struct {
 	win       fyne.Window
 	clipboard fyne.Clipboard
 
-	ctrl          *controller.Controller
+	ctrl          Controller
 	devices       []device.Device
 	deviceWidgets map[device.Serial]*deviceView
 
 	searchEntry *widget.Entry
 }
 
-func NewDashboard(win fyne.Window, ctrl *controller.Controller) *Dashboard {
+func NewDashboard(win fyne.Window, ctrl Controller) *Dashboard {
 	return &Dashboard{
 		win:       win,
 		clipboard: fyne.CurrentApp().Clipboard(),

@@ -13,7 +13,6 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/alessio-palumbo/lifxlan-go/pkg/controller"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
 	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
@@ -37,7 +36,7 @@ type deviceView struct {
 	freezeUntil   time.Time
 }
 
-func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device.Device) *deviceView {
+func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *deviceView {
 	statusLabel := NewStatusLabel(parentWin, d)
 	view := &deviceView{
 		label:         statusLabel,
@@ -194,7 +193,7 @@ func (v *deviceView) setInternalColor(f func(*device.Color)) {
 	v.mu.Unlock()
 }
 
-func toggle(ctrl *controller.Controller, d *device.Device) error {
+func toggle(ctrl Controller, d *device.Device) error {
 	if d.PoweredOn {
 		return ctrl.Send(d.Serial, messages.SetPowerOff())
 	}
