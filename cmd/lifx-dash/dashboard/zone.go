@@ -10,8 +10,6 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
-const minContrastBrightness = 40
-
 type ZoneCell struct {
 	widget.BaseWidget
 
@@ -83,15 +81,15 @@ func (r *zoneCellRenderer) Layout(size fyne.Size) {
 }
 
 func (r *zoneCellRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(24, 24) // nice small square
+	return fyne.NewSize(24, 24)
 }
 
 func (r *zoneCellRenderer) Refresh() {
 	if r.cell.Selected {
-		r.cell.rect.FillColor = colorToRGBA(colorWithAdjustedContrast(r.cell.SelectedColor))
+		r.cell.rect.FillColor = colorToRGBA(*r.cell.SelectedColor)
 		r.cell.border.StrokeWidth = 3
 	} else {
-		r.cell.rect.FillColor = colorToRGBA(colorWithAdjustedContrast(r.cell.Color))
+		r.cell.rect.FillColor = colorToRGBA(*r.cell.Color)
 		r.cell.border.StrokeWidth = 0.5
 	}
 	r.cell.rect.Refresh()
@@ -99,14 +97,6 @@ func (r *zoneCellRenderer) Refresh() {
 
 func (r *zoneCellRenderer) Objects() []fyne.CanvasObject { return r.objects }
 func (r *zoneCellRenderer) Destroy()                     {}
-
-// colorWithAdjustedContrast sets the minimum brightness of the displayed color
-// to an acceptable contrast level.
-func colorWithAdjustedContrast(c *device.Color) device.Color {
-	color := *c
-	color.Brightness = max(color.Brightness, minContrastBrightness)
-	return color
-}
 
 func colorToLabel(c *device.Color) string {
 	return fmt.Sprintf("H:%.0f,S:%.0f,B:%.0f,K:%d", c.Hue, c.Saturation, c.Brightness, c.Kelvin)

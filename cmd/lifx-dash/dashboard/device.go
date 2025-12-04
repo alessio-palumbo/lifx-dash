@@ -9,6 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -18,14 +19,22 @@ import (
 	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
 )
 
+const (
+	minContrastBrightness = 40
+	freezeUpdatesDuration = 3 * time.Second
+)
+
 type deviceView struct {
 	content *fyne.Container
 	label   *StatusLabel
 	device  *device.Device
 
+	brightness binding.Float
+
 	mu            sync.RWMutex
 	internalColor *device.Color
 	cells         []*ZoneCell
+	freezeUntil   time.Time
 }
 
 func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device.Device) *deviceView {
@@ -34,8 +43,10 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 		label:         statusLabel,
 		device:        d,
 		internalColor: &device.Color{},
+		brightness:    binding.NewFloat(),
 	}
 	*view.internalColor = d.Color
+	view.brightness.Set(d.Color.Brightness)
 
 	if d.Type == device.DeviceTypeSwitch {
 		view.content = container.NewPadded(container.NewVBox(statusLabel))
@@ -47,12 +58,15 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			log.Println(err)
 			return
 		}
+
+		view.freezeUpdates()
 		// optimistic update of local copy
 		view.device.PoweredOn = !view.device.PoweredOn
 		view.refreshUI()
 	})
 
-	brightnessSlider := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
+	brightnessSlider := NewSliderWithData("%.0f%%", 1, 100, 1, view.brightness, func(v float64) error {
+		view.freezeUpdates()
 		view.setInternalColor(func(c *device.Color) { c.Brightness = v })
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
@@ -139,17 +153,33 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 	return view
 }
 
-func (v *deviceView) LastSeenAt() time.Time {
-	return v.device.LastSeenAt
+func (v *deviceView) LastUpdatedAt() time.Time {
+	return v.device.LastUpdatedAt
 }
 
 func (v *deviceView) Update(d device.Device) {
 	*v.device = d
-	v.refreshUI()
+	v.mu.RLock()
+	if v.device.LastUpdatedAt.After(v.freezeUntil) {
+		v.refreshUI()
+	}
+	v.mu.RUnlock()
 }
 
 func (v *deviceView) refreshUI() {
 	v.label.UpdateStatus(v.device.Label, deviceColorToRGBA(v.device))
+
+	if v.brightness != nil {
+		v.brightness.Set(v.device.Color.Brightness)
+	}
+}
+
+// freezeUpdates prevents aggressive updates from racing with user interactions
+// by momentarily avoid refreshing the UI due to state updates, which might be stale.
+func (v *deviceView) freezeUpdates() {
+	v.mu.Lock()
+	v.freezeUntil = time.Now().Add(freezeUpdatesDuration)
+	v.mu.Unlock()
 }
 
 func (v *deviceView) getInternalColor() device.Color {
@@ -178,7 +208,12 @@ func deviceColorToRGBA(d *device.Device) color.RGBA {
 	return colorToRGBA(d.Color)
 }
 
+// colorToRGBA is used to display the color of the device in the UI.
+// Brightness adjustment is performed to make sure the color is visible.
 func colorToRGBA(c device.Color) color.RGBA {
+	// sets the minimum brightness of the displayed color to an acceptable contrast level.
+	c.Brightness = max(c.Brightness, minContrastBrightness)
+
 	if c.Saturation == 0 {
 		r, g, b := c.KelvinToRGB()
 		return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}

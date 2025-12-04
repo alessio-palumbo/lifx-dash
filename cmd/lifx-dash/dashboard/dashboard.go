@@ -95,8 +95,8 @@ func (d *Dashboard) refreshDevices(force bool) {
 	fyne.Do(func() {
 		for _, dev := range latest {
 			if view, ok := d.deviceWidgets[dev.Serial]; ok {
-				// Update widgets only if device state has been refreshed
-				if !dev.LastSeenAt.Equal(view.LastSeenAt()) {
+				// Update widgets only if device state has changed
+				if !dev.LastUpdatedAt.Equal(view.LastUpdatedAt()) {
 					view.Update(dev)
 				}
 			}
