@@ -85,8 +85,11 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 
 		switch d.LightType {
 		case device.LightTypeMatrix:
-			nZones := d.MatrixProperties.Width * d.MatrixProperties.Height
-			grid := newZonesGrid(parentWin, view, nZones, d.MatrixProperties.Width)
+			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
+			if len(d.MatrixProperties.ChainState) > 0 {
+				copy(zones, d.MatrixProperties.ChainState[0][:])
+			}
+			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
 			applyBtn := newApplyZonesButton(
 				view.cells,
 				func() {
@@ -105,7 +108,7 @@ func newDeviceView(parentWin fyne.Window, ctrl *controller.Controller, d *device
 			modalContent.Add(grid)
 			modalContent.Add(applyBtn)
 		case device.LightTypeMultiZone:
-			grid := newZonesGrid(parentWin, view, len(d.MultizoneProperties.Zones), 8)
+			grid := newZonesGrid(parentWin, view, d.MultizoneProperties.Zones, 8)
 			applyBtn := newApplyZonesButton(
 				view.cells,
 				func() {
@@ -195,12 +198,13 @@ func deviceInfo(d *device.Device) string {
 	)
 }
 
-func newZonesGrid(parentWin fyne.Window, view *deviceView, nZones, gridWidth int) *fyne.Container {
-	view.cells = make([]*ZoneCell, nZones)
+func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.LightHsbk, gridWidth int) *fyne.Container {
+	view.cells = make([]*ZoneCell, len(zones))
 	grid := container.NewGridWithColumns(gridWidth)
 
-	for i := range nZones {
-		cell := NewZoneCell(parentWin, func() device.Color { return view.getInternalColor() })
+	for i := range zones {
+		color := device.NewColor(zones[i])
+		cell := NewZoneCell(parentWin, &color, func() device.Color { return view.getInternalColor() })
 		view.cells[i] = cell
 		grid.Add(cell)
 	}

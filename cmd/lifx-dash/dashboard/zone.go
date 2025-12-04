@@ -17,6 +17,7 @@ type ZoneCell struct {
 
 	Index         int
 	Selected      bool
+	Color         *device.Color
 	SelectedColor *device.Color
 	OnTapped      func() device.Color
 
@@ -27,9 +28,10 @@ type ZoneCell struct {
 	updateWidgetColor func(*device.Color)
 }
 
-func NewZoneCell(parentWin fyne.Window, onTap func() device.Color) *ZoneCell {
+func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device.Color) *ZoneCell {
 	infoWidget := widget.NewLabel(colorToLabel(&device.Color{}))
 	z := &ZoneCell{
+		Color:         color,
 		SelectedColor: &device.Color{},
 		OnTapped:      onTap,
 		infoWin:       widget.NewPopUp(infoWidget, parentWin.Canvas()),
@@ -87,8 +89,10 @@ func (r *zoneCellRenderer) MinSize() fyne.Size {
 func (r *zoneCellRenderer) Refresh() {
 	if r.cell.Selected {
 		r.cell.rect.FillColor = colorToRGBA(colorWithAdjustedContrast(r.cell.SelectedColor))
+		r.cell.border.StrokeWidth = 3
 	} else {
-		r.cell.rect.FillColor = color.RGBA{A: 255}
+		r.cell.rect.FillColor = colorToRGBA(colorWithAdjustedContrast(r.cell.Color))
+		r.cell.border.StrokeWidth = 0.5
 	}
 	r.cell.rect.Refresh()
 }
