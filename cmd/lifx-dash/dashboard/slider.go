@@ -30,7 +30,11 @@ func NewSlider(labelFmt string, min, max, step, v float64, sendFunc func(v float
 }
 
 func NewSliderWithData(labelFmt string, min, max, step float64, v binding.Float, sendFunc func(v float64) error) *fyne.Container {
-	sliderLabel := widget.NewLabel(fmt.Sprintf(labelFmt, v))
+	sliderLabel := widget.NewLabel(fmt.Sprintf(labelFmt, 0))
+	if value, err := v.Get(); err != nil {
+		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
+	}
+
 	slider := widget.NewSliderWithData(min, max, v)
 	slider.Step = step
 

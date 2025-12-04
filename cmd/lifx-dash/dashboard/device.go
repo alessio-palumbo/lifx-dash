@@ -79,6 +79,10 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
 			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
 		})
+		bri := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
+			view.setInternalColor(func(c *device.Color) { c.Brightness = v })
+			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
+		})
 		kelvin := NewSlider("%.0fK", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
 			k := uint16(v)
 			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
@@ -92,6 +96,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			hue,
 			widget.NewLabel("Saturation"),
 			sat,
+			widget.NewLabel("Brightness"),
+			bri,
 			widget.NewLabel("Kelvin"),
 			kelvin,
 		)
@@ -103,13 +109,14 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				copy(zones, d.MatrixProperties.ChainState[0][:])
 			}
 			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
-			applyBtn := newApplyZonesButton(
-				view.cells,
+			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					var colors [64]packets.LightHsbk
 					for i, c := range view.cells {
 						if c.Selected {
 							colors[i] = c.SelectedColor.ToDeviceColor()
+							// Make sure color is set when cell gets unselected
+							c.Color = c.SelectedColor
 						}
 					}
 
@@ -119,16 +126,18 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			modalContent.Add(widget.NewLabel("Matrix"))
 			modalContent.Add(grid)
-			modalContent.Add(applyBtn)
+			modalContent.Add(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)))
+
 		case device.LightTypeMultiZone:
 			grid := newZonesGrid(parentWin, view, d.MultizoneProperties.Zones, 8)
-			applyBtn := newApplyZonesButton(
-				view.cells,
+			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					colors := make([]packets.LightHsbk, len(view.cells))
 					for i, c := range view.cells {
 						if c.Selected {
 							colors[i] = c.SelectedColor.ToDeviceColor()
+							// Make sure color is set when cell gets unselected
+							c.Color = c.SelectedColor
 						}
 					}
 					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
@@ -140,7 +149,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			modalContent.Add(widget.NewLabel("Zones"))
 			modalContent.Add(grid)
-			modalContent.Add(applyBtn)
+			modalContent.Add(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)))
 		}
 
 		d := dialog.NewCustom("", "Close", container.NewScroll(container.NewPadded(modalContent)), parentWin)
@@ -210,6 +219,10 @@ func deviceColorToRGBA(d *device.Device) color.RGBA {
 // colorToRGBA is used to display the color of the device in the UI.
 // Brightness adjustment is performed to make sure the color is visible.
 func colorToRGBA(c device.Color) color.RGBA {
+	if c.Brightness == 0 {
+		return color.RGBA{}
+	}
+
 	// sets the minimum brightness of the displayed color to an acceptable contrast level.
 	c.Brightness = max(c.Brightness, minContrastBrightness)
 
@@ -263,4 +276,43 @@ func newApplyZonesButton(cells []*ZoneCell, onTap func()) *Button {
 			})
 		},
 	)
+}
+
+func newGridActionsButtons(cells []*ZoneCell) *fyne.Container {
+	copyBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentCopyIcon()).Resource, func() {
+		var colors []string
+		for _, c := range cells {
+			colors = append(colors, colorToLabel(c.SelectedColor))
+		}
+		fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
+	})
+
+	deselectBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
+		for _, c := range cells {
+			if c.Selected {
+				c.Selected = false
+				c.Refresh()
+			}
+		}
+	})
+	clearGridBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.DeleteIcon()).Resource, func() {
+		for i := range cells {
+			c := cells[i]
+			if c.Selected {
+				c.Selected = false
+			}
+			c.Color = &device.Color{}
+			c.Refresh()
+		}
+	})
+
+	return newButtonGrid(copyBtn, deselectBtn, clearGridBtn)
+}
+
+func newButtonGrid(buttons ...*widget.Button) *fyne.Container {
+	grid := container.NewGridWithColumns(len(buttons))
+	for _, b := range buttons {
+		grid.Add(b)
+	}
+	return grid
 }
