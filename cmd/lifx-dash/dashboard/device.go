@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
@@ -20,7 +21,8 @@ import (
 
 const (
 	minContrastBrightness = 40
-	freezeUpdatesDuration = 3 * time.Second
+	freezeUpdatesDuration = 10 * time.Second
+	modalLabelWidth       = 80
 )
 
 type deviceView struct {
@@ -66,40 +68,50 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 	brightnessSlider := NewSliderWithData("%.0f%%", 1, 100, 1, view.brightness, func(v float64) error {
 		view.freezeUpdates()
-		view.setInternalColor(func(c *device.Color) { c.Brightness = v })
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
 
 	settingsBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
 		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Hue = v })
+			if view.updateIfSelectedCells() {
+				return nil
+			}
 			return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
 		})
 		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
+			if view.updateIfSelectedCells() {
+				return nil
+			}
 			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
 		})
 		bri := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Brightness = v })
+			if view.updateIfSelectedCells() {
+				return nil
+			}
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 		})
 		kelvin := NewSlider("%.0fK", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
 			k := uint16(v)
 			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
+			if view.updateIfSelectedCells() {
+				return nil
+			}
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
 		})
 
-		header := container.NewCenter(widget.NewLabel("Colour Settings"))
+		header := container.NewCenter(widget.NewLabelWithStyle("Colour Settings", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
+		grid := container.NewVBox(
+			LabelledSlider("Hue", modalLabelWidth, hue),
+			LabelledSlider("Saturation", modalLabelWidth, sat),
+			LabelledSlider("Brightness", modalLabelWidth, bri),
+			LabelledSlider("Kelvin", modalLabelWidth, kelvin),
+		)
 		modalContent := container.NewVBox(
 			header,
-			widget.NewLabel("Hue"),
-			hue,
-			widget.NewLabel("Saturation"),
-			sat,
-			widget.NewLabel("Brightness"),
-			bri,
-			widget.NewLabel("Kelvin"),
-			kelvin,
+			grid,
 		)
 
 		switch d.LightType {
@@ -117,6 +129,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 							colors[i] = c.SelectedColor.ToDeviceColor()
 							// Make sure color is set when cell gets unselected
 							c.Color = c.SelectedColor
+						} else {
+							colors[i] = c.Color.ToDeviceColor()
 						}
 					}
 
@@ -202,6 +216,21 @@ func (v *deviceView) setInternalColor(f func(*device.Color)) {
 	v.mu.Unlock()
 }
 
+func (v *deviceView) updateIfSelectedCells() (updated bool) {
+	if len(v.cells) == 0 {
+		return
+	}
+	color := v.getInternalColor()
+	for _, c := range v.cells {
+		if c.Selected {
+			c.SelectedColor = &color
+			c.Refresh()
+			updated = true
+		}
+	}
+	return
+}
+
 func toggle(ctrl Controller, d *device.Device) error {
 	if d.PoweredOn {
 		return ctrl.Send(d.Serial, messages.SetPowerOff())
@@ -257,25 +286,6 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 	}
 
 	return grid
-}
-func newApplyZonesButton(cells []*ZoneCell, onTap func()) *Button {
-	label := "Apply Zones"
-	return NewButton(
-		label,
-		onTap,
-		func(b *Button) {
-			var colors []string
-			for _, c := range cells {
-				colors = append(colors, colorToLabel(c.SelectedColor))
-			}
-			fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
-			b.SetText("Zones Copied!")
-			fyne.Do(func() {
-				time.Sleep(400 * time.Millisecond)
-				b.SetText(label)
-			})
-		},
-	)
 }
 
 func newGridActionsButtons(cells []*ZoneCell) *fyne.Container {
