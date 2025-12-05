@@ -30,7 +30,8 @@ type deviceView struct {
 	label   *StatusLabel
 	device  *device.Device
 
-	brightness binding.Float
+	brightness  binding.Float
+	lightCircle *canvas.Circle
 
 	mu            sync.RWMutex
 	internalColor *device.Color
@@ -74,6 +75,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	settingsBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
 		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Hue = v })
+			view.updateLightCircle()
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -81,6 +83,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		})
 		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
+			view.updateLightCircle()
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -88,6 +91,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		})
 		bri := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Brightness = v })
+			view.updateLightCircle()
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -96,6 +100,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		kelvin := NewSlider("%.0fK", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
 			k := uint16(v)
 			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
+			view.updateLightCircle()
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -115,6 +120,13 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		)
 
 		switch d.LightType {
+		case device.LightTypeSingleZone:
+			view.lightCircle = canvas.NewCircle(deviceColorToRGBA(view.device))
+			circleContainer := container.NewGridWrap(fyne.NewSize(100, 100), view.lightCircle)
+			topMargin := canvas.NewRectangle(color.Transparent)
+			topMargin.SetMinSize(fyne.NewSize(1, 20))
+			modalContent.Add(topMargin)
+			modalContent.Add(container.NewCenter(circleContainer))
 		case device.LightTypeMatrix:
 			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
 			if len(d.MatrixProperties.ChainState) > 0 {
@@ -216,6 +228,13 @@ func (v *deviceView) setInternalColor(f func(*device.Color)) {
 	v.mu.Unlock()
 }
 
+func (v *deviceView) updateLightCircle() {
+	if v.lightCircle == nil {
+		return
+	}
+	v.lightCircle.FillColor = colorToRGBA(v.getInternalColor())
+	v.lightCircle.Refresh()
+}
 func (v *deviceView) updateIfSelectedCells() (updated bool) {
 	if len(v.cells) == 0 {
 		return
