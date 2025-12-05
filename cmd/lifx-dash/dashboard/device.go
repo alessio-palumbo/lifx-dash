@@ -123,10 +123,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		case device.LightTypeSingleZone:
 			view.lightCircle = canvas.NewCircle(deviceColorToRGBA(view.device))
 			circleContainer := container.NewGridWrap(fyne.NewSize(100, 100), view.lightCircle)
-			topMargin := canvas.NewRectangle(color.Transparent)
-			topMargin.SetMinSize(fyne.NewSize(1, 20))
-			modalContent.Add(topMargin)
-			modalContent.Add(container.NewCenter(circleContainer))
+			modalContent.Add(withTopMargin(container.NewCenter(circleContainer), 30))
 		case device.LightTypeMatrix:
 			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
 			if len(d.MatrixProperties.ChainState) > 0 {
@@ -150,9 +147,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				},
 			)
 
-			modalContent.Add(widget.NewLabel("Matrix"))
-			modalContent.Add(grid)
-			modalContent.Add(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)))
+			modalContent.Add(withTopMargin(grid, 30))
+			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)), 10))
 
 		case device.LightTypeMultiZone:
 			grid := newZonesGrid(parentWin, view, d.MultizoneProperties.Zones, 8)
@@ -173,13 +169,12 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				},
 			)
 
-			modalContent.Add(widget.NewLabel("Zones"))
-			modalContent.Add(grid)
-			modalContent.Add(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)))
+			modalContent.Add(withTopMargin(grid, 30))
+			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)), 10))
 		}
 
 		d := dialog.NewCustom("", "Close", container.NewScroll(container.NewPadded(modalContent)), parentWin)
-		d.Resize(fyne.NewSize(300, 500))
+		d.Resize(fyne.NewSize(350, 500))
 		d.Show()
 	})
 
@@ -344,4 +339,9 @@ func newButtonGrid(buttons ...*widget.Button) *fyne.Container {
 		grid.Add(b)
 	}
 	return grid
+}
+func withTopMargin(content fyne.CanvasObject, px float32) fyne.CanvasObject {
+	pad := canvas.NewRectangle(color.Transparent)
+	pad.SetMinSize(fyne.NewSize(1, px))
+	return container.NewBorder(pad, nil, nil, nil, content)
 }
