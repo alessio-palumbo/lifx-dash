@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	minContrastBrightness = 40
+	minContrastBrightness = 80
 	freezeUpdatesDuration = 10 * time.Second
 	modalLabelWidth       = 80
 )
@@ -179,7 +179,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 		}
 
-		d := dialog.NewCustom("", "Close", container.NewScroll(container.NewPadded(modalContent)), parentWin)
+		d := dialog.NewCustom("", "Close", container.NewPadded(modalContent), parentWin)
 		d.Resize(fyne.NewSize(350, 500))
 		d.Show()
 	})
