@@ -76,6 +76,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		hue := NewSlider("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Hue = v })
 			view.updateLightCircle()
+			// Do not send a message when editing zones only.
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -84,6 +85,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		sat := NewSlider("%.0f%%", 0, 100, 1, d.Color.Saturation, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
 			view.updateLightCircle()
+			// Do not send a message when editing zones only.
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -92,6 +94,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		bri := NewSlider("%.0f%%", 1, 100, 1, d.Color.Brightness, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Brightness = v })
 			view.updateLightCircle()
+			// Do not send a message when editing zones only.
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -101,6 +104,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			k := uint16(v)
 			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
 			view.updateLightCircle()
+			// Do not send a message when editing zones only.
 			if view.updateIfSelectedCells() {
 				return nil
 			}
@@ -148,7 +152,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			)
 
 			modalContent.Add(withTopMargin(grid, 30))
-			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)), 10))
+			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
 		case device.LightTypeMultiZone:
 			grid := newZonesGrid(parentWin, view, d.MultizoneProperties.Zones, 8)
@@ -160,6 +164,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 							colors[i] = c.SelectedColor.ToDeviceColor()
 							// Make sure color is set when cell gets unselected
 							c.Color = c.SelectedColor
+						} else {
+							colors[i] = c.Color.ToDeviceColor()
 						}
 					}
 					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
@@ -170,7 +176,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			)
 
 			modalContent.Add(withTopMargin(grid, 30))
-			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view.cells)), 10))
+			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 		}
 
 		d := dialog.NewCustom("", "Close", container.NewScroll(container.NewPadded(modalContent)), parentWin)
@@ -230,6 +236,7 @@ func (v *deviceView) updateLightCircle() {
 	v.lightCircle.FillColor = colorToRGBA(v.getInternalColor())
 	v.lightCircle.Refresh()
 }
+
 func (v *deviceView) updateIfSelectedCells() (updated bool) {
 	if len(v.cells) == 0 {
 		return
@@ -302,35 +309,47 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 	return grid
 }
 
-func newGridActionsButtons(cells []*ZoneCell) *fyne.Container {
+func newGridActionsButtons(view *deviceView) *fyne.Container {
 	copyBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentCopyIcon()).Resource, func() {
 		var colors []string
-		for _, c := range cells {
-			colors = append(colors, colorToLabel(c.SelectedColor))
+		for _, c := range view.cells {
+			colors = append(colors, colorToLabel(c.Color))
 		}
 		fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
 	})
 
-	deselectBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
-		for _, c := range cells {
+	confirmSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ConfirmIcon()).Resource, func() {
+		for _, c := range view.cells {
+			if c.Selected {
+				c.Color = c.SelectedColor
+				c.Selected = false
+				c.Refresh()
+			}
+		}
+	})
+
+	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
+		for _, c := range view.cells {
 			if c.Selected {
 				c.Selected = false
 				c.Refresh()
 			}
 		}
 	})
+
 	clearGridBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.DeleteIcon()).Resource, func() {
-		for i := range cells {
-			c := cells[i]
+		deviceColor := view.device.Color
+		for i := range view.cells {
+			c := view.cells[i]
 			if c.Selected {
 				c.Selected = false
 			}
-			c.Color = &device.Color{}
+			c.Color = &deviceColor
 			c.Refresh()
 		}
 	})
 
-	return newButtonGrid(copyBtn, deselectBtn, clearGridBtn)
+	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, clearGridBtn)
 }
 
 func newButtonGrid(buttons ...*widget.Button) *fyne.Container {

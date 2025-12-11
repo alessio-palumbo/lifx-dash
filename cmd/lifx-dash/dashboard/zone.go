@@ -27,7 +27,7 @@ type ZoneCell struct {
 }
 
 func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device.Color) *ZoneCell {
-	infoWidget := widget.NewLabel(colorToLabel(&device.Color{}))
+	infoWidget := widget.NewLabel(colorToLabel(color))
 	z := &ZoneCell{
 		Color:         color,
 		SelectedColor: &device.Color{},
@@ -45,10 +45,7 @@ func (z *ZoneCell) Tapped(_ *fyne.PointEvent) {
 	z.Selected = !z.Selected
 	if z.Selected {
 		*z.SelectedColor = z.OnTapped()
-	} else {
-		*z.SelectedColor = device.Color{}
 	}
-	z.updateWidgetColor(z.SelectedColor)
 	z.Refresh()
 }
 
@@ -88,9 +85,11 @@ func (r *zoneCellRenderer) Refresh() {
 	if r.cell.Selected {
 		r.cell.rect.FillColor = colorToRGBA(*r.cell.SelectedColor)
 		r.cell.border.StrokeWidth = 3
+		r.cell.updateWidgetColor(r.cell.SelectedColor)
 	} else {
 		r.cell.rect.FillColor = colorToRGBA(*r.cell.Color)
 		r.cell.border.StrokeWidth = 0.5
+		r.cell.updateWidgetColor(r.cell.Color)
 	}
 	r.cell.rect.Refresh()
 }
