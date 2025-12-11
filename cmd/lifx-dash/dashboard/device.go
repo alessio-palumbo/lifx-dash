@@ -295,7 +295,7 @@ func deviceInfo(d *device.Device) string {
 	)
 }
 
-func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.LightHsbk, gridWidth int) *fyne.Container {
+func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.LightHsbk, gridWidth int) *ZoneGrid {
 	view.cells = make([]*ZoneCell, len(zones))
 	grid := container.NewGridWithColumns(gridWidth)
 
@@ -306,7 +306,7 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 		grid.Add(cell)
 	}
 
-	return grid
+	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells)
 }
 
 func newGridActionsButtons(view *deviceView) *fyne.Container {
