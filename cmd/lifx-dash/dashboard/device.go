@@ -128,7 +128,11 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			view.lightCircle = canvas.NewCircle(deviceColorToRGBA(view.device))
 			circleContainer := container.NewGridWrap(fyne.NewSize(100, 100), view.lightCircle)
 			modalContent.Add(withTopMargin(container.NewCenter(circleContainer), 30))
+
 		case device.LightTypeMatrix:
+			if d.MatrixProperties.Width == 0 {
+				break
+			}
 			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
 			if len(d.MatrixProperties.ChainState) > 0 {
 				copy(zones, d.MatrixProperties.ChainState[0][:])
@@ -137,14 +141,9 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					var colors [64]packets.LightHsbk
-					for i, c := range view.cells {
-						if c.Selected {
-							colors[i] = c.SelectedColor.ToDeviceColor()
-							// Make sure color is set when cell gets unselected
-							c.Color = c.SelectedColor
-						} else {
-							colors[i] = c.Color.ToDeviceColor()
-						}
+					for i := range view.cells {
+						c := view.cells[i]
+						colors[i] = c.ApplyColor()
 					}
 
 					ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, d.MatrixProperties.Width, colors, time.Millisecond))
@@ -159,15 +158,11 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					colors := make([]packets.LightHsbk, len(view.cells))
-					for i, c := range view.cells {
-						if c.Selected {
-							colors[i] = c.SelectedColor.ToDeviceColor()
-							// Make sure color is set when cell gets unselected
-							c.Color = c.SelectedColor
-						} else {
-							colors[i] = c.Color.ToDeviceColor()
-						}
+					for i := range view.cells {
+						c := view.cells[i]
+						colors[i] = c.ApplyColor()
 					}
+
 					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
 					for _, msg := range msgs {
 						ctrl.Send(d.Serial, msg)
@@ -243,8 +238,8 @@ func (v *deviceView) updateIfSelectedCells() (updated bool) {
 	}
 	color := v.getInternalColor()
 	for _, c := range v.cells {
+		c.SelectedColor = &color
 		if c.Selected {
-			c.SelectedColor = &color
 			c.Refresh()
 			updated = true
 		}
@@ -324,11 +319,13 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 				c.Color = c.SelectedColor
 				c.Selected = false
 				c.Refresh()
+			} else {
+				c.SelectedColor = c.Color
 			}
 		}
 	})
 
-	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
+	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentUndoIcon()).Resource, func() {
 		for _, c := range view.cells {
 			if c.Selected {
 				c.Selected = false

@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/widget"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
+	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
 )
 
 type ZoneCell struct {
@@ -30,7 +31,7 @@ func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device
 	infoWidget := widget.NewLabel(colorToLabel(color))
 	z := &ZoneCell{
 		Color:         color,
-		SelectedColor: &device.Color{},
+		SelectedColor: color,
 		OnTapped:      onTap,
 		infoWin:       widget.NewPopUp(infoWidget, parentWin.Canvas()),
 		updateWidgetColor: func(c *device.Color) {
@@ -41,12 +42,25 @@ func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device
 	return z
 }
 
-func (z *ZoneCell) Tapped(_ *fyne.PointEvent) {
-	z.Selected = !z.Selected
-	if z.Selected {
-		*z.SelectedColor = z.OnTapped()
-	}
+func (z *ZoneCell) SetSelected(v bool) {
+	z.Selected = v
 	z.Refresh()
+}
+
+func (z *ZoneCell) ApplyColor() packets.LightHsbk {
+	var hsbk packets.LightHsbk
+	if z.Selected {
+		hsbk = z.SelectedColor.ToDeviceColor()
+		// Make sure color is set when cell gets unselected
+		z.Color = z.SelectedColor
+	} else {
+		hsbk = z.Color.ToDeviceColor()
+	}
+	return hsbk
+}
+
+func (z *ZoneCell) Tapped(_ *fyne.PointEvent) {
+	z.SetSelected(!z.Selected)
 }
 
 func (z *ZoneCell) TappedSecondary(*fyne.PointEvent) {

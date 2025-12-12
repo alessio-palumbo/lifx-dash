@@ -98,7 +98,7 @@ func (z *ZoneGrid) applyDrag() {
 			if intersects(minX, minY, maxX, maxY, x1, y1, x2, y2) {
 				idx := r*z.Cols + c
 				cell := z.Cells[idx]
-				cell.Tapped(nil)
+				cell.SetSelected(true)
 			}
 		}
 	}
