@@ -141,9 +141,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					var colors [64]packets.LightHsbk
-					for i := range view.cells {
-						c := view.cells[i]
-						colors[i] = c.ApplyColor()
+					for i, c := range view.cells {
+						colors[i] = c.HSBK()
 					}
 
 					ctrl.Send(d.Serial, messages.SetMatrixColors(0, 1, d.MatrixProperties.Width, colors, time.Millisecond))
@@ -158,9 +157,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					colors := make([]packets.LightHsbk, len(view.cells))
-					for i := range view.cells {
-						c := view.cells[i]
-						colors[i] = c.ApplyColor()
+					for i, c := range view.cells {
+						colors[i] = c.HSBK()
 					}
 
 					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
@@ -315,38 +313,39 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 
 	confirmSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ConfirmIcon()).Resource, func() {
 		for _, c := range view.cells {
+			c.PrevState.Last = c.Color
 			if c.Selected {
 				c.Color = c.SelectedColor
 				c.Selected = false
 				c.Refresh()
-			} else {
-				c.SelectedColor = c.Color
 			}
+			c.SelectedColor = c.Color
 		}
 	})
 
-	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentUndoIcon()).Resource, func() {
+	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
 		for _, c := range view.cells {
 			if c.Selected {
 				c.Selected = false
 				c.Refresh()
 			}
+			c.SelectedColor = c.Color
+		}
+	})
+
+	undoBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentUndoIcon()).Resource, func() {
+		for _, c := range view.cells {
+			c.ResetLast()
 		}
 	})
 
 	clearGridBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.DeleteIcon()).Resource, func() {
-		deviceColor := view.device.Color
-		for i := range view.cells {
-			c := view.cells[i]
-			if c.Selected {
-				c.Selected = false
-			}
-			c.Color = &deviceColor
-			c.Refresh()
+		for _, c := range view.cells {
+			c.ResetInitial()
 		}
 	})
 
-	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, clearGridBtn)
+	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, undoBtn, clearGridBtn)
 }
 
 func newButtonGrid(buttons ...*widget.Button) *fyne.Container {

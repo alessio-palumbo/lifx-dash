@@ -18,6 +18,7 @@ type ZoneCell struct {
 	Selected      bool
 	Color         *device.Color
 	SelectedColor *device.Color
+	PrevState     *PrevState
 	OnTapped      func() device.Color
 
 	rect   *canvas.Rectangle
@@ -27,11 +28,17 @@ type ZoneCell struct {
 	updateWidgetColor func(*device.Color)
 }
 
+type PrevState struct {
+	Initial *device.Color
+	Last    *device.Color
+}
+
 func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device.Color) *ZoneCell {
 	infoWidget := widget.NewLabel(colorToLabel(color))
 	z := &ZoneCell{
 		Color:         color,
 		SelectedColor: color,
+		PrevState:     &PrevState{Initial: color, Last: color},
 		OnTapped:      onTap,
 		infoWin:       widget.NewPopUp(infoWidget, parentWin.Canvas()),
 		updateWidgetColor: func(c *device.Color) {
@@ -47,16 +54,27 @@ func (z *ZoneCell) SetSelected(v bool) {
 	z.Refresh()
 }
 
-func (z *ZoneCell) ApplyColor() packets.LightHsbk {
-	var hsbk packets.LightHsbk
+func (z *ZoneCell) ResetInitial() {
+	z.resetColor(z.PrevState.Initial)
+}
+
+func (z *ZoneCell) ResetLast() {
+	z.resetColor(z.PrevState.Last)
+}
+
+func (z *ZoneCell) resetColor(color *device.Color) {
 	if z.Selected {
-		hsbk = z.SelectedColor.ToDeviceColor()
-		// Make sure color is set when cell gets unselected
-		z.Color = z.SelectedColor
-	} else {
-		hsbk = z.Color.ToDeviceColor()
+		z.Selected = false
 	}
-	return hsbk
+	z.Color = color
+	z.Refresh()
+}
+
+func (z *ZoneCell) HSBK() packets.LightHsbk {
+	if z.Selected {
+		return z.SelectedColor.ToDeviceColor()
+	}
+	return z.Color.ToDeviceColor()
 }
 
 func (z *ZoneCell) Tapped(_ *fyne.PointEvent) {
