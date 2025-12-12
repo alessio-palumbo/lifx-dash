@@ -134,8 +134,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				break
 			}
 			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
-			if len(d.MatrixProperties.ChainState) > 0 {
-				copy(zones, d.MatrixProperties.ChainState[0][:])
+			for i := range d.MatrixProperties.ChainState {
+				copy(zones[i*64:], d.MatrixProperties.ChainState[i][:])
 			}
 			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
 			applyBtn := widget.NewButton("Apply Zones",
