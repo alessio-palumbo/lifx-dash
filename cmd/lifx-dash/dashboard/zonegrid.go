@@ -23,7 +23,7 @@ type ZoneGrid struct {
 	dragEnd   *fyne.Position
 }
 
-func NewZoneGrid(rows, cols int, cells []*ZoneCell) *ZoneGrid {
+func NewZoneGrid(rows int, cols int, cells []*ZoneCell, rowLayout []int, hiddenIndexes map[int]bool) *ZoneGrid {
 	z := &ZoneGrid{
 		Rows:  rows,
 		Cols:  cols,
@@ -33,13 +33,39 @@ func NewZoneGrid(rows, cols int, cells []*ZoneCell) *ZoneGrid {
 			StrokeWidth: 2,
 		},
 	}
-	// Create a GridWithColumns and wrap it
-	cellObjs := make([]fyne.CanvasObject, len(cells))
-	for i, c := range cells {
-		cellObjs[i] = c
-	}
-	z.grid = container.NewGridWithColumns(cols, cellObjs...)
 
+	// Fill up any missing rows with the standard width.
+	// This allows specifying only the first custom-width rows of a grid
+	// or simply builds a grid of rows * width with no custom-width.
+	if rowsLeft := rows - len(rowLayout); rowsLeft > 0 {
+		for range rowsLeft {
+			rowLayout = append(rowLayout, cols)
+		}
+	}
+
+	// Build UI cells preserving exact positions while ignoring hidden cells.
+	uiCells := make([]fyne.CanvasObject, 0, len(cells))
+	var realIndex int
+	for _, rowWidth := range rowLayout {
+		rowCells := make([]fyne.CanvasObject, 0, rowWidth)
+
+		for col := 0; col < rowWidth && realIndex < len(cells); col++ {
+			if hiddenIndexes[realIndex] {
+				// skip hidden zones
+				realIndex++
+				col--
+				continue
+			}
+			rowCells = append(rowCells, cells[realIndex])
+			realIndex++
+		}
+
+		rowGrid := container.NewGridWithColumns(rowWidth, rowCells...)
+		centeredRow := container.NewCenter(rowGrid)
+		uiCells = append(uiCells, centeredRow)
+	}
+
+	z.grid = container.NewVBox(uiCells...)
 	z.ExtendBaseWidget(z)
 	return z
 }
@@ -85,20 +111,35 @@ func (z *ZoneGrid) applyDrag() {
 	minY := min(start.Y, end.Y)
 	maxY := max(start.Y, end.Y)
 
-	cellW := z.Size().Width / float32(z.Cols)
-	cellH := z.Size().Height / float32(z.Rows)
+	for _, rowObj := range z.grid.Objects {
+		if rowGrid, ok := rowObj.(*fyne.Container); ok {
+			// absolute position relative to ZoneGrid
+			rowPos := rowGrid.Position()
+			// actual size of the row container
+			rowSize := rowGrid.Size()
 
-	for r := 0; r < z.Rows; r++ {
-		for c := 0; c < z.Cols; c++ {
-			x1 := float32(c) * cellW
-			y1 := float32(r) * cellH
-			x2 := x1 + cellW
-			y2 := y1 + cellH
+			n := len(rowGrid.Objects)
+			if n == 0 {
+				continue
+			}
+			cellW := rowSize.Width / float32(n)
+			cellH := rowSize.Height
 
-			if intersects(minX, minY, maxX, maxY, x1, y1, x2, y2) {
-				idx := r*z.Cols + c
-				cell := z.Cells[idx]
-				cell.SetSelected(true)
+			for c, obj := range rowGrid.Objects {
+				if cellContainer, ok := obj.(*fyne.Container); ok {
+					for _, child := range cellContainer.Objects {
+						if cell, ok := child.(*ZoneCell); ok {
+							x1 := rowPos.X + float32(c)*cellW
+							y1 := rowPos.Y
+							x2 := x1 + cellW
+							y2 := y1 + cellH
+
+							if intersects(minX, minY, maxX, maxY, x1, y1, x2, y2) {
+								cell.SetSelected(true)
+							}
+						}
+					}
+				}
 			}
 		}
 	}

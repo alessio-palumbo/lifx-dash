@@ -299,7 +299,10 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 		grid.Add(cell)
 	}
 
-	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells)
+	if r := CustomGridRules(view.device); r != nil {
+		return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, r.RowLayout, r.HiddenIndexes)
+	}
+	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, nil, nil)
 }
 
 func newGridActionsButtons(view *deviceView) *fyne.Container {
