@@ -25,6 +25,8 @@ const (
 	modalLabelWidth       = 80
 )
 
+var emptyMatrixState = [64]packets.LightHsbk{}
+
 type deviceView struct {
 	content *fyne.Container
 	label   *StatusLabel
@@ -32,6 +34,8 @@ type deviceView struct {
 
 	brightness  binding.Float
 	lightCircle *canvas.Circle
+
+	settingsBtn *widget.Button
 
 	mu            sync.RWMutex
 	internalColor *device.Color
@@ -72,7 +76,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
 
-	settingsBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
+	view.settingsBtn = widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
 		hue := NewSliderWithEntry("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Hue = v })
 			view.updateLightCircle()
@@ -177,7 +181,13 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		d.Show()
 	})
 
-	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(toggleBtn, settingsBtn)))
+	// Disable settings until zones have been loaded.
+	switch view.device.LightType {
+	case device.LightTypeMatrix, device.LightTypeMultiZone:
+		view.settingsBtn.Disable()
+	}
+
+	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(toggleBtn, view.settingsBtn)))
 	return view
 }
 
@@ -191,6 +201,9 @@ func (v *deviceView) Update(d device.Device) {
 	if v.device.LastUpdatedAt.After(v.freezeUntil) {
 		v.refreshUI()
 	}
+	if v.settingsBtn.Disabled() {
+		v.enableSettingsIfReady()
+	}
 	v.mu.RUnlock()
 }
 
@@ -200,6 +213,20 @@ func (v *deviceView) refreshUI() {
 	if v.brightness != nil {
 		v.brightness.Set(v.device.Color.Brightness)
 	}
+}
+
+func (v *deviceView) enableSettingsIfReady() {
+	switch v.device.LightType {
+	case device.LightTypeMatrix:
+		if len(v.device.MatrixProperties.ChainState) < 1 || (v.device.MatrixProperties.ChainState[0] == emptyMatrixState) {
+			return
+		}
+	case device.LightTypeMultiZone:
+		if len(v.device.MultizoneProperties.Zones) == 0 {
+			return
+		}
+	}
+	v.settingsBtn.Enable()
 }
 
 // freezeUpdates prevents aggressive updates from racing with user interactions
