@@ -66,8 +66,17 @@ func (z *ZoneCell) resetColor(color *device.Color) {
 	if z.Selected {
 		z.Selected = false
 	}
+	z.SelectedColor = color
 	z.Color = color
 	z.Refresh()
+}
+
+func (z *ZoneCell) ClearSelection() {
+	if z.Selected {
+		z.Selected = false
+		z.Refresh()
+	}
+	z.SelectedColor = z.Color
 }
 
 func (z *ZoneCell) HSBK() packets.LightHsbk {

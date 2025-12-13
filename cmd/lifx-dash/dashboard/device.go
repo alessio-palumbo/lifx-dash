@@ -316,23 +316,18 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 
 	confirmSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ConfirmIcon()).Resource, func() {
 		for _, c := range view.cells {
+			// Set prev state to the current state before applying the new color to selected cells.
 			c.PrevState.Last = c.Color
 			if c.Selected {
 				c.Color = c.SelectedColor
-				c.Selected = false
-				c.Refresh()
 			}
-			c.SelectedColor = c.Color
+			c.ClearSelection()
 		}
 	})
 
 	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
 		for _, c := range view.cells {
-			if c.Selected {
-				c.Selected = false
-				c.Refresh()
-			}
-			c.SelectedColor = c.Color
+			c.ClearSelection()
 		}
 	})
 
