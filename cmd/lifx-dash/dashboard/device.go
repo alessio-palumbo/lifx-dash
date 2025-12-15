@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"log"
@@ -334,11 +335,12 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 
 func newGridActionsButtons(view *deviceView) *fyne.Container {
 	copyBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentCopyIcon()).Resource, func() {
-		var colors []string
+		var colors []externalColor
 		for _, c := range view.cells {
-			colors = append(colors, colorToLabel(c.Color))
+			colors = append(colors, colorToExternal(c.Color))
 		}
-		fyne.CurrentApp().Clipboard().SetContent(fmt.Sprintf("%s", colors))
+		b, _ := json.Marshal(colors)
+		fyne.CurrentApp().Clipboard().SetContent(string(b))
 	})
 
 	confirmSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ConfirmIcon()).Resource, func() {
