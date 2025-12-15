@@ -26,6 +26,8 @@ type ZoneCell struct {
 
 	infoWin           *widget.PopUp
 	updateWidgetColor func(*device.Color)
+
+	inactive bool
 }
 
 type PrevState struct {
@@ -49,7 +51,14 @@ func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device
 	return z
 }
 
+func (z *ZoneCell) SetInactive() {
+	z.inactive = true
+}
+
 func (z *ZoneCell) SetSelected(v bool) {
+	if z.inactive {
+		return
+	}
 	z.Selected = v
 	z.Refresh()
 }
@@ -123,6 +132,15 @@ func (r *zoneCellRenderer) MinSize() fyne.Size {
 }
 
 func (r *zoneCellRenderer) Refresh() {
+	if r.cell.inactive {
+		// Inactive cells must be fully transparent.
+		r.cell.rect.FillColor = color.RGBA{0, 0, 0, 0}
+		r.cell.border.StrokeWidth = 0
+		r.cell.rect.Refresh()
+		r.cell.border.Refresh()
+		return
+	}
+
 	if r.cell.Selected {
 		r.cell.rect.FillColor = colorToRGBA(*r.cell.SelectedColor)
 		r.cell.border.StrokeWidth = 3

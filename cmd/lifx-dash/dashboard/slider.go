@@ -64,7 +64,6 @@ func NewSliderWithEntry(labelFmt string, min, max, step, v float64, sendFunc fun
 	cb := sendFunc
 
 	slider.OnChanged = func(value float64) {
-		log.Println("setting again")
 		entry.SetText(fmt.Sprintf(labelFmt, value))
 		if err := cb(value); err != nil {
 			log.Println(err)
@@ -125,7 +124,6 @@ func (e *SelectEntry) FocusLost() {
 	e.Entry.FocusLost()
 	// Emulate a double click event and select all text on focus.
 	e.TypedKey(&fyne.KeyEvent{Name: fyne.KeyEnter})
-	log.Println("LOst")
 }
 
 func (e *SelectEntry) MinSize() fyne.Size {

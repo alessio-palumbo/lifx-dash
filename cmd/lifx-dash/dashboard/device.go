@@ -141,6 +141,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
 			for i := range d.MatrixProperties.ChainState {
 				copy(zones[i*64:], d.MatrixProperties.ChainState[i][:])
+				// TODO remove when supporting chains.
+				break
 			}
 			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
 			applyBtn := widget.NewButton("Apply Zones",
@@ -185,7 +187,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	// Disable settings until zones have been loaded.
 	switch view.device.LightType {
 	case device.LightTypeMatrix, device.LightTypeMultiZone:
-		view.settingsBtn.Disable()
+		view.enableSettingsIfReady()
 	}
 
 	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(toggleBtn, view.settingsBtn)))
@@ -202,7 +204,7 @@ func (v *deviceView) Update(d device.Device) {
 	if v.device.LastUpdatedAt.After(v.freezeUntil) {
 		v.refreshUI()
 	}
-	if v.settingsBtn.Disabled() {
+	if v.settingsBtn != nil && v.settingsBtn.Disabled() {
 		v.enableSettingsIfReady()
 	}
 	v.mu.RUnlock()
@@ -328,9 +330,9 @@ func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.Light
 	}
 
 	if r := CustomGridRules(view.device); r != nil {
-		return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, r.RowLayout, r.HiddenIndexes)
+		return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, r.HiddenIndexes)
 	}
-	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, nil, nil)
+	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, nil)
 }
 
 func newGridActionsButtons(view *deviceView) *fyne.Container {

@@ -35,14 +35,12 @@ var lunaProducts = map[int]struct{}{
 }
 
 type GridRules struct {
-	RowLayout     []int
 	HiddenIndexes map[int]bool
 }
 
 func CustomGridRules(d *device.Device) *GridRules {
 	if _, ok := candleProducts[int(d.ProductID)]; ok {
 		return &GridRules{
-			RowLayout: []int{2},
 			HiddenIndexes: map[int]bool{
 				2: true, 3: true, 4: true,
 			},
@@ -50,7 +48,6 @@ func CustomGridRules(d *device.Device) *GridRules {
 	}
 	if _, ok := ceilingProducts[int(d.ProductID)]; ok {
 		return &GridRules{
-			RowLayout: []int{2},
 			HiddenIndexes: map[int]bool{
 				0: true, 1: true, 6: true, 7: true,
 				56: true, 57: true, 62: true, 63: true,
@@ -59,7 +56,6 @@ func CustomGridRules(d *device.Device) *GridRules {
 	}
 	if _, ok := ceiling13Products[int(d.ProductID)]; ok {
 		return &GridRules{
-			RowLayout: []int{2},
 			HiddenIndexes: map[int]bool{
 				0: true, 1: true, 14: true, 15: true,
 				112: true, 113: true, 126: true, 127: true,
@@ -68,7 +64,6 @@ func CustomGridRules(d *device.Device) *GridRules {
 	}
 	if _, ok := lunaProducts[int(d.ProductID)]; ok {
 		return &GridRules{
-			RowLayout: []int{5, 7, 7, 7, 5},
 			HiddenIndexes: map[int]bool{
 				0: true, 6: true,
 				28: true, 34: true,
