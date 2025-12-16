@@ -19,7 +19,11 @@ func main() {
 	w.SetTitle(fmt.Sprintf("LIFX Dash %s (%s)", version.Version, version.Commit))
 	w.Resize(fyne.NewSize(1200, 800))
 
-	ctrl, err := controller.New(controller.WithHFStateRefreshPeriod(2*time.Second), controller.WithLFStateRefreshPeriod(time.Minute))
+	ctrl, err := controller.New(
+		controller.WithHFStateRefreshPeriod(2*time.Second),
+		controller.WithLFStateRefreshPeriod(time.Minute),
+		controller.WithPreflightHandshakeTimeout(10*time.Second),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
