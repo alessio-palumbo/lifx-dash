@@ -26,7 +26,7 @@ const (
 	modalLabelWidth       = 80
 )
 
-var emptyMatrixState = [64]packets.LightHsbk{}
+var emptyLightState = packets.LightHsbk{}
 
 type deviceView struct {
 	content *fyne.Container
@@ -138,11 +138,10 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			if d.MatrixProperties.Width == 0 {
 				break
 			}
-			zones := make([]packets.LightHsbk, d.MatrixProperties.Width*d.MatrixProperties.Height)
-			for i := range d.MatrixProperties.ChainState {
-				copy(zones[i*64:], d.MatrixProperties.ChainState[i][:])
-				// TODO remove when supporting chains.
-				break
+
+			zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
+			for i := range d.MatrixProperties.ChainZones {
+				copy(zones, d.MatrixProperties.ChainZones[i])
 			}
 			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
 			applyBtn := widget.NewButton("Apply Zones",
@@ -221,11 +220,24 @@ func (v *deviceView) refreshUI() {
 func (v *deviceView) enableSettingsIfReady() {
 	switch v.device.LightType {
 	case device.LightTypeMatrix:
-		if len(v.device.MatrixProperties.ChainState) < 1 || (v.device.MatrixProperties.ChainState[0] == emptyMatrixState) {
+		if len(v.device.MatrixProperties.ChainZones) < 1 {
+			v.settingsBtn.Disable()
+			return
+		}
+		var isSet bool
+		for i := range v.device.MatrixProperties.ChainZones[0] {
+			if v.device.MatrixProperties.ChainZones[0][i] != emptyLightState {
+				isSet = true
+				break
+			}
+		}
+		if !isSet {
+			v.settingsBtn.Disable()
 			return
 		}
 	case device.LightTypeMultiZone:
 		if len(v.device.MultizoneProperties.Zones) == 0 {
+			v.settingsBtn.Disable()
 			return
 		}
 	}
