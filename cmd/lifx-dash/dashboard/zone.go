@@ -75,6 +75,7 @@ func (z *ZoneCell) resetColor(color *device.Color) {
 	if z.Selected {
 		z.Selected = false
 	}
+	z.PrevState.Last = z.Color
 	z.SelectedColor = color
 	z.Color = color
 	z.Refresh()

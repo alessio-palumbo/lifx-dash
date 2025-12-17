@@ -78,24 +78,31 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	})
 
 	view.settingsBtn = widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
-		hue := NewSliderWithEntry("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
-			view.setInternalColor(func(c *device.Color) { c.Hue = v })
-			view.updateLightCircle()
-			// Do not send a message when editing zones only.
-			if view.updateIfSelectedCells() {
-				return nil
-			}
-			return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
-		})
-		sat := NewSliderWithEntry("%.0f", 0, 100, 1, d.Color.Saturation, func(v float64) error {
-			view.setInternalColor(func(c *device.Color) { c.Saturation = v })
-			view.updateLightCircle()
-			// Do not send a message when editing zones only.
-			if view.updateIfSelectedCells() {
-				return nil
-			}
-			return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
-		})
+		sliders := container.NewVBox()
+		if view.device.ColorProperties.HasColor {
+			hue := NewSliderWithEntry("%.0f", 0, 360, 1, d.Color.Hue, func(v float64) error {
+				view.setInternalColor(func(c *device.Color) { c.Hue = v })
+				view.updateLightCircle()
+				// Do not send a message when editing zones only.
+				if view.updateIfSelectedCells() {
+					return nil
+				}
+				return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
+			})
+			sliders.Add(LabelledSlider("Hue", modalLabelWidth, hue))
+
+			sat := NewSliderWithEntry("%.0f", 0, 100, 1, d.Color.Saturation, func(v float64) error {
+				view.setInternalColor(func(c *device.Color) { c.Saturation = v })
+				view.updateLightCircle()
+				// Do not send a message when editing zones only.
+				if view.updateIfSelectedCells() {
+					return nil
+				}
+				return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
+			})
+			sliders.Add(LabelledSlider("Saturation", modalLabelWidth, sat))
+		}
+
 		bri := NewSliderWithEntry("%.0f", 1, 100, 1, d.Color.Brightness, func(v float64) error {
 			view.setInternalColor(func(c *device.Color) { c.Brightness = v })
 			view.updateLightCircle()
@@ -105,7 +112,15 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			}
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 		})
-		kelvin := NewSliderWithEntry("%.0f", 1500, 9000, 100, float64(d.Color.Kelvin), func(v float64) error {
+		sliders.Add(LabelledSlider("Brightness", modalLabelWidth, bri))
+
+		kMin, kMax := float64(d.ColorProperties.TemperatureRange.Min), float64(d.ColorProperties.TemperatureRange.Max)
+		kValue := float64(d.Color.Kelvin)
+		// Handle devices with fixed kelvin which returns incorrect kelvin color.
+		if kMin == kMax {
+			kValue = kMin
+		}
+		kelvin := NewSliderWithEntry("%.0f", kMin, kMax, 100, kValue, func(v float64) error {
 			k := uint16(v)
 			view.setInternalColor(func(c *device.Color) { c.Kelvin = k })
 			view.updateLightCircle()
@@ -115,16 +130,10 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			}
 			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
 		})
+		sliders.Add(LabelledSlider("Kelvin", modalLabelWidth, kelvin))
 
-		header := container.NewCenter(widget.NewLabelWithStyle("Colour Settings", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
-		sliders := container.NewVBox(
-			LabelledSlider("Hue", modalLabelWidth, hue),
-			LabelledSlider("Saturation", modalLabelWidth, sat),
-			LabelledSlider("Brightness", modalLabelWidth, bri),
-			LabelledSlider("Kelvin", modalLabelWidth, kelvin),
-		)
 		modalContent := container.NewVBox(
-			header,
+			container.NewCenter(widget.NewLabelWithStyle("Colour Settings", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})),
 			sliders,
 		)
 
