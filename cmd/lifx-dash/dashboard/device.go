@@ -40,7 +40,7 @@ type deviceView struct {
 
 	mu            sync.RWMutex
 	internalColor *device.Color
-	cells         []*ZoneCell
+	grids         []*ZoneGrid
 	freezeUntil   time.Time
 }
 
@@ -117,7 +117,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		})
 
 		header := container.NewCenter(widget.NewLabelWithStyle("Colour Settings", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
-		grid := container.NewVBox(
+		sliders := container.NewVBox(
 			LabelledSlider("Hue", modalLabelWidth, hue),
 			LabelledSlider("Saturation", modalLabelWidth, sat),
 			LabelledSlider("Brightness", modalLabelWidth, bri),
@@ -125,7 +125,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		)
 		modalContent := container.NewVBox(
 			header,
-			grid,
+			sliders,
 		)
 
 		switch d.LightType {
@@ -139,32 +139,42 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				break
 			}
 
-			zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
+			chainBox := container.NewVBox()
 			for i := range d.MatrixProperties.ChainZones {
+				zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
 				copy(zones, d.MatrixProperties.ChainZones[i])
+				grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
+				view.grids = append(view.grids, grid)
+				chainBox.Add(withTopMargin(grid, 30))
 			}
-			grid := newZonesGrid(parentWin, view, zones, d.MatrixProperties.Width)
+
+			scroll := container.NewVScroll(chainBox)
+			scroll.SetMinSize(fyne.NewSize(0, 320))
+			modalContent.Add(scroll)
+
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
-					colors := make([]packets.LightHsbk, len(view.cells))
-					for i, c := range view.cells {
-						colors[i] = c.HSBK()
-					}
-					for _, m := range messages.SetMatrixColorsFromSlice(0, 1, d.MatrixProperties.Width, colors, time.Millisecond) {
-						ctrl.Send(d.Serial, m)
+					for i, g := range view.grids {
+						colors := make([]packets.LightHsbk, len(g.Cells))
+						for i, c := range g.Cells {
+							colors[i] = c.HSBK()
+						}
+						for _, m := range messages.SetMatrixColorsFromSlice(i, 1, d.MatrixProperties.Width, colors, time.Millisecond) {
+							ctrl.Send(d.Serial, m)
+						}
 					}
 				},
 			)
 
-			modalContent.Add(withTopMargin(grid, 30))
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
 		case device.LightTypeMultiZone:
 			grid := newZonesGrid(parentWin, view, d.MultizoneProperties.Zones, 8)
+			view.grids = append(view.grids, grid)
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
-					colors := make([]packets.LightHsbk, len(view.cells))
-					for i, c := range view.cells {
+					colors := make([]packets.LightHsbk, len(grid.Cells))
+					for i, c := range grid.Cells {
 						colors[i] = c.HSBK()
 					}
 
@@ -274,15 +284,17 @@ func (v *deviceView) updateLightCircle() {
 }
 
 func (v *deviceView) updateIfSelectedCells() (updated bool) {
-	if len(v.cells) == 0 {
+	if len(v.grids) == 0 || len(v.grids[0].Cells) == 0 {
 		return
 	}
 	color := v.getInternalColor()
-	for _, c := range v.cells {
-		c.SelectedColor = &color
-		if c.Selected {
-			c.Refresh()
-			updated = true
+	for _, g := range v.grids {
+		for _, c := range g.Cells {
+			c.SelectedColor = &color
+			if c.Selected {
+				c.Refresh()
+				updated = true
+			}
 		}
 	}
 	return
@@ -332,58 +344,68 @@ func deviceInfo(d *device.Device) string {
 }
 
 func newZonesGrid(parentWin fyne.Window, view *deviceView, zones []packets.LightHsbk, gridWidth int) *ZoneGrid {
-	view.cells = make([]*ZoneCell, len(zones))
+	cells := make([]*ZoneCell, len(zones))
 	grid := container.NewGridWithColumns(gridWidth)
 
 	for i := range zones {
 		color := device.NewColor(zones[i])
 		cell := NewZoneCell(parentWin, &color, func() device.Color { return view.getInternalColor() })
-		view.cells[i] = cell
+		cells[i] = cell
 		grid.Add(cell)
 	}
 
 	if r := CustomGridRules(view.device); r != nil {
-		return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, r.HiddenIndexes)
+		return NewZoneGrid(len(zones)/gridWidth, gridWidth, cells, r.HiddenIndexes)
 	}
-	return NewZoneGrid(len(zones)/gridWidth, gridWidth, view.cells, nil)
+	return NewZoneGrid(len(zones)/gridWidth, gridWidth, cells, nil)
 }
 
 func newGridActionsButtons(view *deviceView) *fyne.Container {
 	copyBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentCopyIcon()).Resource, func() {
 		var colors []externalColor
-		for _, c := range view.cells {
-			colors = append(colors, colorToExternal(c.Color))
+		for _, g := range view.grids {
+			for _, c := range g.Cells {
+				colors = append(colors, colorToExternal(c.Color))
+			}
 		}
 		b, _ := json.Marshal(colors)
 		fyne.CurrentApp().Clipboard().SetContent(string(b))
 	})
 
 	confirmSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ConfirmIcon()).Resource, func() {
-		for _, c := range view.cells {
-			// Set prev state to the current state before applying the new color to selected cells.
-			c.PrevState.Last = c.Color
-			if c.Selected {
-				c.Color = c.SelectedColor
+		for _, g := range view.grids {
+			for _, c := range g.Cells {
+				// Set prev state to the current state before applying the new color to selected cells.
+				c.PrevState.Last = c.Color
+				if c.Selected {
+					c.Color = c.SelectedColor
+				}
+				c.ClearSelection()
 			}
-			c.ClearSelection()
 		}
 	})
 
 	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
-		for _, c := range view.cells {
-			c.ClearSelection()
+		for _, g := range view.grids {
+			for _, c := range g.Cells {
+				c.ClearSelection()
+			}
 		}
 	})
 
 	undoBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentUndoIcon()).Resource, func() {
-		for _, c := range view.cells {
-			c.ResetLast()
+		for _, g := range view.grids {
+			for _, c := range g.Cells {
+				c.ResetLast()
+			}
 		}
 	})
 
 	clearGridBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.DeleteIcon()).Resource, func() {
-		for _, c := range view.cells {
-			c.ResetInitial()
+		for _, g := range view.grids {
+			for _, c := range g.Cells {
+				c.ResetInitial()
+			}
 		}
 	})
 

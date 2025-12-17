@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	fyne.io/fyne/v2 v2.6.3
-	github.com/alessio-palumbo/lifxlan-go v0.2.20-0.20251216215026-875c8da8451c
+	github.com/alessio-palumbo/lifxlan-go v0.2.20-0.20251216235727-caec12bad82f
 	github.com/alessio-palumbo/lifxprotocol-go v0.2.0
 )
 
