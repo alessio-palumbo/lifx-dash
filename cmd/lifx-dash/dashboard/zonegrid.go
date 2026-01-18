@@ -100,8 +100,8 @@ func (z *ZoneGrid) applyDrag() {
 	cellW := z.Size().Width / float32(z.Cols)
 	cellH := z.Size().Height / float32(z.Rows)
 
-	for r := 0; r < z.Rows; r++ {
-		for c := 0; c < z.Cols; c++ {
+	for r := range z.Rows {
+		for c := range z.Cols {
 			x1 := float32(c) * cellW
 			y1 := float32(r) * cellH
 			x2 := x1 + cellW

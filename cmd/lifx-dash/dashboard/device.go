@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -21,7 +22,10 @@ import (
 )
 
 const (
-	minContrastBrightness = 80
+	gridMinBrightness = 50.0
+	gridMaxBrightness = 100.0
+	gridGamma         = 2.2
+
 	freezeUpdatesDuration = 10 * time.Second
 	modalLabelWidth       = 80
 )
@@ -332,8 +336,7 @@ func colorToRGBA(c device.Color) color.RGBA {
 		return color.RGBA{}
 	}
 
-	// sets the minimum brightness of the displayed color to an acceptable contrast level.
-	c.Brightness = max(c.Brightness, minContrastBrightness)
+	c.Brightness = mapBrightnessForUI(c.Brightness)
 
 	if c.Saturation == 0 {
 		r, g, b := c.KelvinToRGB()
@@ -341,6 +344,13 @@ func colorToRGBA(c device.Color) color.RGBA {
 	}
 	r, g, b := c.HSBToRGB()
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+}
+
+func mapBrightnessForUI(b float64) float64 {
+	t := b / 100.0
+	t = math.Pow(t, 1.0/gridGamma)
+
+	return gridMinBrightness + t*(gridMaxBrightness-gridMinBrightness)
 }
 
 func deviceInfo(d *device.Device) string {
