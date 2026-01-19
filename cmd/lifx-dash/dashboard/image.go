@@ -106,9 +106,11 @@ func zonesForImage(img *image.NRGBA, gridW, gridH int) []device.Color {
 	return grid
 }
 
+// gridForZones returns the dimensions for a linear grid of n zones,
+// overallocating for irregular sizes.
 func gridForZones(zones int, aspect float64) (w, h int) {
 	h = max(1, int(math.Sqrt(float64(zones)/aspect)))
-	w = max(1, zones/h)
+	w = int(math.Ceil(float64(zones) / float64(h)))
 	return
 }
 
