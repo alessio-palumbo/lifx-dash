@@ -171,8 +171,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				func() {
 					for i, g := range view.grids {
 						colors := make([]packets.LightHsbk, len(g.Cells))
-						for i, c := range g.Cells {
-							colors[i] = c.HSBK()
+						for j, c := range g.Cells {
+							colors[j] = c.HSBK()
 						}
 						for _, m := range messages.SetMatrixColorsFromSlice(i, 1, d.MatrixProperties.Width, colors, time.Millisecond) {
 							ctrl.Send(d.Serial, m)
@@ -340,7 +340,9 @@ func colorToRGBA(c device.Color) color.RGBA {
 
 	if c.Saturation == 0 {
 		r, g, b := c.KelvinToRGB()
-		return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+		// Apply brightness scale after Kelvin conversion.
+		scale := c.Brightness / 100.0
+		return color.RGBA{R: uint8(float64(r) * scale), G: uint8(float64(g) * scale), B: uint8(float64(b) * scale), A: 255}
 	}
 	r, g, b := c.HSBToRGB()
 	return color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
