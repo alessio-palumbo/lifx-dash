@@ -170,6 +170,11 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
+					// Prevent brightness-only updates triggered by the device last update.
+					// The brightness in this case is set in the individual pixels, so it does not
+					// correspond to the general brightness of the device.
+					view.freezeUpdates()
+
 					for i, g := range view.grids {
 						colors := make([]packets.LightHsbk, len(g.Cells))
 						for j, c := range g.Cells {
