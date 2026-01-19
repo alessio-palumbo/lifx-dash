@@ -155,11 +155,12 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			}
 
 			chainBox := container.NewVBox()
+			view.grids = make([]*ZoneGrid, len(d.MatrixProperties.ChainZones))
 			for i := range d.MatrixProperties.ChainZones {
 				zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
 				copy(zones, d.MatrixProperties.ChainZones[i])
 				grid := newZonesGrid(view, zones, d.MatrixProperties.Width)
-				view.grids = append(view.grids, grid)
+				view.grids[i] = grid
 				chainBox.Add(withTopMargin(grid, 30))
 			}
 
@@ -185,7 +186,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 		case device.LightTypeMultiZone:
 			grid := newZonesGrid(view, d.MultizoneProperties.Zones, 8)
-			view.grids = append(view.grids, grid)
+			view.grids = []*ZoneGrid{grid}
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					colors := make([]packets.LightHsbk, len(grid.Cells))
