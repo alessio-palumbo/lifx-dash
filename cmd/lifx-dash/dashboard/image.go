@@ -18,6 +18,8 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+const defaultImageBrightnessRatio = 0.7
+
 func parseImage(view *deviceView) {
 	d := dialog.NewFileOpen(
 		func(reader fyne.URIReadCloser, err error) {
@@ -49,7 +51,10 @@ func parseImage(view *deviceView) {
 
 			for _, g := range view.grids {
 				for i, c := range g.Cells {
-					c.resetColor(&grid[i])
+					color := &grid[i]
+					// Set brightness to a lower ratio for better ux.
+					color.Brightness = color.Brightness * defaultImageBrightnessRatio
+					c.SetColor(color)
 				}
 			}
 		},
@@ -62,10 +67,7 @@ func parseImage(view *deviceView) {
 // fitToGridPixels resizes an image to fit a matrix of the given size, preserving
 // proportions and placing it at the center of the matrix, returning a []device.Color.
 func fitToGridPixels(img image.Image, gridW, gridH int) []device.Color {
-	fitted := imaging.Fit(img, gridW, gridH, imaging.Lanczos)
-	canvas := imaging.New(gridW, gridH, color.NRGBA{0, 0, 0, 255})
-	out := imaging.PasteCenter(canvas, fitted)
-
+	out := imaging.Fill(img, gridW, gridH, imaging.Center, imaging.Lanczos)
 	return zonesForImage(out, gridW, gridH)
 }
 

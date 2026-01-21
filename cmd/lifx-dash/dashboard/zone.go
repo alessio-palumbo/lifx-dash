@@ -64,14 +64,14 @@ func (z *ZoneCell) SetSelected(v bool) {
 }
 
 func (z *ZoneCell) ResetInitial() {
-	z.resetColor(z.PrevState.Initial)
+	z.SetColor(z.PrevState.Initial)
 }
 
 func (z *ZoneCell) ResetLast() {
-	z.resetColor(z.PrevState.Last)
+	z.SetColor(z.PrevState.Last)
 }
 
-func (z *ZoneCell) resetColor(color *device.Color) {
+func (z *ZoneCell) SetColor(color *device.Color) {
 	if z.Selected {
 		z.Selected = false
 	}
