@@ -28,6 +28,8 @@ const (
 
 	freezeUpdatesDuration = 10 * time.Second
 	modalLabelWidth       = 80
+
+	unsetColorValue = -1
 )
 
 var emptyLightState = packets.LightHsbk{}
@@ -45,18 +47,22 @@ type deviceView struct {
 
 	mu            sync.RWMutex
 	internalColor *device.Color
-	grids         []*ZoneGrid
-	freezeUntil   time.Time
+	// zoneSelectionColor defaults to -1 for any unselected field allowing
+	// changing only brightness or saturation or hue for the selected cells.
+	zoneSelectionColor *device.Color
+	grids              []*ZoneGrid
+	freezeUntil        time.Time
 }
 
 func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *deviceView {
 	statusLabel := NewStatusLabel(parentWin, d)
 	view := &deviceView{
-		label:         statusLabel,
-		device:        d,
-		parentWin:     parentWin,
-		internalColor: &device.Color{},
-		brightness:    binding.NewFloat(),
+		label:              statusLabel,
+		device:             d,
+		parentWin:          parentWin,
+		internalColor:      &device.Color{},
+		zoneSelectionColor: &device.Color{Hue: unsetColorValue, Saturation: unsetColorValue, Brightness: unsetColorValue},
+		brightness:         binding.NewFloat(),
 	}
 	*view.internalColor = d.Color
 	view.brightness.Set(d.Color.Brightness)
@@ -290,9 +296,16 @@ func (v *deviceView) getInternalColor() device.Color {
 	return *v.internalColor
 }
 
+func (v *deviceView) getZoneSelectionColor() device.Color {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return *v.zoneSelectionColor
+}
+
 func (v *deviceView) setInternalColor(f func(*device.Color)) {
 	v.mu.Lock()
 	f(v.internalColor)
+	f(v.zoneSelectionColor)
 	v.mu.Unlock()
 }
 
@@ -304,14 +317,17 @@ func (v *deviceView) updateLightCircle() {
 	v.lightCircle.Refresh()
 }
 
+// updateIfSelectedCells sets the individual selected color for each zone
+// according to the current zone selection color.
 func (v *deviceView) updateIfSelectedCells() (updated bool) {
 	if len(v.grids) == 0 || len(v.grids[0].Cells) == 0 {
 		return
 	}
-	color := v.getInternalColor()
+	color := v.getZoneSelectionColor()
 	for _, g := range v.grids {
 		for _, c := range g.Cells {
-			c.SelectedColor = &color
+			updatedColor := updateColorFromZoneSelectionColor(c.SelectedColor, &color)
+			c.SelectedColor = &updatedColor
 			if c.Selected {
 				c.Refresh()
 				updated = true
@@ -319,6 +335,28 @@ func (v *deviceView) updateIfSelectedCells() (updated bool) {
 		}
 	}
 	return
+}
+
+func updateColorFromZoneSelectionColor(c, sc *device.Color) device.Color {
+	updated := device.Color{
+		Hue:        c.Hue,
+		Saturation: c.Saturation,
+		Brightness: c.Brightness,
+		Kelvin:     c.Kelvin,
+	}
+	if sc.Hue != unsetColorValue {
+		updated.Hue = sc.Hue
+	}
+	if sc.Saturation != unsetColorValue {
+		updated.Saturation = sc.Saturation
+	}
+	if sc.Brightness != unsetColorValue {
+		updated.Brightness = sc.Brightness
+	}
+	if sc.Kelvin != 0 {
+		updated.Kelvin = sc.Kelvin
+	}
+	return updated
 }
 
 func toggle(ctrl Controller, d *device.Device) error {
@@ -379,7 +417,7 @@ func newZonesGrid(view *deviceView, zones []packets.LightHsbk, gridWidth int) *Z
 
 	for i := range zones {
 		color := device.NewColor(zones[i])
-		cell := NewZoneCell(view.parentWin, &color, func() device.Color { return view.getInternalColor() })
+		cell := NewZoneCell(view.parentWin, &color)
 		cells[i] = cell
 		grid.Add(cell)
 	}

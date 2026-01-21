@@ -19,7 +19,6 @@ type ZoneCell struct {
 	Color         *device.Color
 	SelectedColor *device.Color
 	PrevState     *PrevState
-	OnTapped      func() device.Color
 
 	rect   *canvas.Rectangle
 	border *canvas.Rectangle
@@ -35,13 +34,12 @@ type PrevState struct {
 	Last    *device.Color
 }
 
-func NewZoneCell(parentWin fyne.Window, color *device.Color, onTap func() device.Color) *ZoneCell {
+func NewZoneCell(parentWin fyne.Window, color *device.Color) *ZoneCell {
 	infoWidget := widget.NewLabel(colorToLabel(color))
 	z := &ZoneCell{
 		Color:         color,
 		SelectedColor: color,
 		PrevState:     &PrevState{Initial: color, Last: color},
-		OnTapped:      onTap,
 		infoWin:       widget.NewPopUp(infoWidget, parentWin.Canvas()),
 		updateWidgetColor: func(c *device.Color) {
 			infoWidget.SetText(colorToLabel(c))
