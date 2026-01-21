@@ -365,10 +365,11 @@ func deviceInfo(d *device.Device) string {
 	return fmt.Sprintf("Serial: %s\n"+
 		"IP: %s\n"+
 		"ProductID: %d\n"+
+		"FW Version: %s\n"+
 		"Group: %s\n"+
 		"Location: %s\n"+
 		"RSSI: %s",
-		d.Serial, d.Address.IP.String(), d.ProductID, d.Group, d.Location, d.WifiRSSI,
+		d.Serial, d.Address.IP.String(), d.ProductID, d.FirmwareVersion, d.Group, d.Location, d.WifiRSSI,
 	)
 }
 
