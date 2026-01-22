@@ -51,6 +51,7 @@ type deviceView struct {
 	// changing only brightness or saturation or hue for the selected cells.
 	zoneSelectionColor *device.Color
 	grids              []*ZoneGrid
+	activeGrid         int
 	freezeUntil        time.Time
 }
 
@@ -167,12 +168,38 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				copy(zones, d.MatrixProperties.ChainZones[i])
 				grid := newZonesGrid(view, zones, d.MatrixProperties.Width)
 				view.grids[i] = grid
-				chainBox.Add(withTopMargin(grid, 30))
 			}
 
-			scroll := container.NewVScroll(chainBox)
-			scroll.SetMinSize(fyne.NewSize(0, 320))
-			modalContent.Add(scroll)
+			chainBox.Add(withTopMargin(view.grids[view.activeGrid], 30))
+			modalContent.Add(chainBox)
+
+			// For chain devices add buttons to select active grid.
+			if len(view.grids) > 1 {
+				tileSelector := container.NewHBox()
+				buttons := make([]*widget.Button, len(view.grids))
+				for i := range view.grids {
+					btn := widget.NewButton(fmt.Sprintf("%d", i+1), func() {
+						view.activeGrid = i
+						chainBox.Objects = []fyne.CanvasObject{
+							withTopMargin(view.grids[view.activeGrid], 30),
+						}
+						chainBox.Refresh()
+						for bi, b := range buttons {
+							if view.activeGrid == bi {
+								b.Disable()
+							} else {
+								b.Enable()
+							}
+						}
+					})
+					if view.activeGrid == i {
+						btn.Disable()
+					}
+					buttons[i] = btn
+					tileSelector.Add(btn)
+				}
+				modalContent.Add(container.NewCenter(tileSelector))
+			}
 
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
