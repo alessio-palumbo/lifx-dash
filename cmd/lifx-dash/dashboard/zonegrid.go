@@ -2,19 +2,38 @@ package dashboard
 
 import (
 	"image/color"
+	"math"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
+	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
+)
+
+type Rotation int
+
+const (
+	RotateClockwise Rotation = iota
+	RotateCounterClockwise
 )
 
 type ZoneGrid struct {
 	widget.BaseWidget
 
-	Cells []*ZoneCell
 	Rows  int
 	Cols  int
+	Cells []*ZoneCell
+	// Store is size N*N where N = max(Rows, Cols)
+	Store []*ZoneCell
+	// Extent is the side length of the square rotation space.
+	// It is always max(Rows, Cols) and guarantees lossless rotation
+	// for irregular grids.
+	Extent        int
+	HiddenIndexes map[int]bool
+
+	parentWin fyne.Window
 
 	grid    *fyne.Container
 	overlay *canvas.Rectangle
@@ -23,36 +42,42 @@ type ZoneGrid struct {
 	dragEnd   *fyne.Position
 }
 
-func NewZoneGrid(rows int, cols int, cells []*ZoneCell, hiddenIndexes map[int]bool) *ZoneGrid {
+func NewZoneGrid(view *deviceView, zones []packets.LightHsbk, gridWidth int) *ZoneGrid {
+	rows := len(zones) / gridWidth
+	cols := gridWidth
+	extent := max(rows, cols)
+
 	z := &ZoneGrid{
-		Rows:  rows,
-		Cols:  cols,
-		Cells: cells,
+		Rows:      rows,
+		Cols:      cols,
+		Store:     make([]*ZoneCell, extent*extent),
+		Extent:    extent,
+		parentWin: view.parentWin,
+		grid:      container.NewVBox(),
 		overlay: &canvas.Rectangle{
 			StrokeColor: color.RGBA{255, 255, 255, 255},
 			StrokeWidth: 2,
 		},
 	}
 
-	// Build UI cells preserving exact positions while ignoring hidden cells.
-	uiCells := make([]fyne.CanvasObject, 0, len(cells))
-	var realIndex int
-	for range rows {
-		rowCells := make([]fyne.CanvasObject, 0, cols)
-
-		for col := 0; col < cols && realIndex < len(cells); col++ {
-			if hiddenIndexes[realIndex] {
-				cells[realIndex].SetInactive()
-			}
-			rowCells = append(rowCells, cells[realIndex])
-			realIndex++
-		}
-
-		rowGrid := container.NewGridWithColumns(cols, rowCells...)
-		uiCells = append(uiCells, rowGrid)
+	if r := CustomGridRules(view.device); r != nil {
+		z.HiddenIndexes = r.HiddenIndexes
 	}
 
-	z.grid = container.NewVBox(uiCells...)
+	rowOff, colOff := z.storeOffset()
+
+	for i, zone := range zones {
+		color := device.NewColor(zone)
+		cell := NewZoneCell(view.parentWin, &color)
+
+		r := i / cols
+		c := i % cols
+
+		dst := z.storeIndex((rowOff + r), (colOff + c))
+		z.Store[dst] = cell
+	}
+
+	z.projectToGrid()
 	z.ExtendBaseWidget(z)
 	return z
 }
@@ -86,6 +111,104 @@ func (z *ZoneGrid) DragEnd() {
 	z.dragStart = nil
 	z.dragEnd = nil
 	z.Refresh()
+}
+
+func (z *ZoneGrid) Rotate(dir Rotation) {
+	center := float64(z.Extent-1) / 2
+	next := make([]*ZoneCell, z.Extent*z.Extent)
+
+	for r := range z.Extent {
+		for c := range z.Extent {
+			cell := z.Store[z.storeIndex(r, c)]
+			if cell == nil {
+				continue
+			}
+
+			x := float64(c) - center
+			y := float64(r) - center
+
+			var nx, ny float64
+			if dir == RotateClockwise {
+				nx, ny = -y, x
+			} else {
+				nx, ny = y, -x
+			}
+
+			nc := int(math.Round(nx + center))
+			nr := int(math.Round(ny + center))
+
+			if nr >= 0 && nr < z.Extent && nc >= 0 && nc < z.Extent {
+				next[z.storeIndex(nr, nc)] = cell
+			}
+		}
+	}
+
+	z.Store = next
+	z.projectToGrid()
+}
+
+func (z *ZoneGrid) projectToGrid() {
+	rowOff, colOff := z.storeOffset()
+
+	z.Cells = make([]*ZoneCell, z.Rows*z.Cols)
+
+	for r := 0; r < z.Rows; r++ {
+		for c := 0; c < z.Cols; c++ {
+			src := z.storeIndex((rowOff + r), (colOff + c))
+			dst := r*z.Cols + c
+
+			if cell := z.Store[src]; cell != nil {
+				z.Cells[dst] = cell
+			} else {
+				z.Cells[dst] = NewZoneCell(z.parentWin, &device.Color{})
+			}
+		}
+	}
+
+	z.buildGrid()
+	z.Refresh()
+}
+
+// buildGrid builds UI cells preserving exact positions while ignoring hidden cells.
+func (z *ZoneGrid) buildGrid() {
+	z.grid.Objects = nil
+
+	var realIndex int
+	for range z.Rows {
+		rowCells := make([]fyne.CanvasObject, 0, z.Cols)
+
+		for col := 0; col < z.Cols && realIndex < len(z.Cells); col++ {
+			z.Cells[realIndex].SetActive()
+			if z.HiddenIndexes[realIndex] {
+				z.Cells[realIndex].SetInactive()
+			}
+			rowCells = append(rowCells, z.Cells[realIndex])
+			realIndex++
+		}
+
+		rowGrid := container.NewGridWithColumns(z.Cols, rowCells...)
+		z.grid.Add(rowGrid)
+	}
+
+	z.grid.Refresh()
+}
+
+// storeOffset returns the row and column offset required to center the
+// visible grid (Rows x Cols) inside the square Store matrix (Extent x Extent).
+//
+// This offset must be applied consistently when projecting cells
+// between Store and the visible grid to preserve symmetry during rotations.
+func (z *ZoneGrid) storeOffset() (rowOff, colOff int) {
+	return (z.Extent - z.Rows) / 2, (z.Extent - z.Cols) / 2
+}
+
+// storeIndex converts 2D Store coordinates (row, col) into the linear index
+// used by the Store slice.
+//
+// Store is always indexed using Extent as its stride (not Rows or Cols),
+// because Store represents the canonical square matrix used for rotation.
+func (z *ZoneGrid) storeIndex(rowIdx, colIdx int) int {
+	return rowIdx*z.Extent + colIdx
 }
 
 func (z *ZoneGrid) applyDrag() {

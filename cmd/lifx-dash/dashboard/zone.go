@@ -53,6 +53,10 @@ func (z *ZoneCell) SetInactive() {
 	z.inactive = true
 }
 
+func (z *ZoneCell) SetActive() {
+	z.inactive = false
+}
+
 func (z *ZoneCell) SetSelected(v bool) {
 	if z.inactive {
 		return

@@ -166,8 +166,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			for i := range d.MatrixProperties.ChainZones {
 				zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
 				copy(zones, d.MatrixProperties.ChainZones[i])
-				grid := newZonesGrid(view, zones, d.MatrixProperties.Width)
-				view.grids[i] = grid
+				view.grids[i] = NewZoneGrid(view, zones, d.MatrixProperties.Width)
 			}
 
 			chainBox.Add(withTopMargin(view.grids[view.activeGrid], 30))
@@ -198,7 +197,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 					buttons[i] = btn
 					tileSelector.Add(btn)
 				}
-				modalContent.Add(container.NewCenter(tileSelector))
+				modalContent.Add(withTopMargin(container.NewCenter(tileSelector), 10))
 			}
 
 			applyBtn := widget.NewButton("Apply Zones",
@@ -223,7 +222,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
 		case device.LightTypeMultiZone:
-			grid := newZonesGrid(view, d.MultizoneProperties.Zones, 8)
+			grid := NewZoneGrid(view, d.MultizoneProperties.Zones, 8)
 			view.grids = []*ZoneGrid{grid}
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
@@ -438,23 +437,6 @@ func deviceInfo(d *device.Device) string {
 	)
 }
 
-func newZonesGrid(view *deviceView, zones []packets.LightHsbk, gridWidth int) *ZoneGrid {
-	cells := make([]*ZoneCell, len(zones))
-	grid := container.NewGridWithColumns(gridWidth)
-
-	for i := range zones {
-		color := device.NewColor(zones[i])
-		cell := NewZoneCell(view.parentWin, &color)
-		cells[i] = cell
-		grid.Add(cell)
-	}
-
-	if r := CustomGridRules(view.device); r != nil {
-		return NewZoneGrid(len(zones)/gridWidth, gridWidth, cells, r.HiddenIndexes)
-	}
-	return NewZoneGrid(len(zones)/gridWidth, gridWidth, cells, nil)
-}
-
 func newGridActionsButtons(view *deviceView) *fyne.Container {
 	copyBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentCopyIcon()).Resource, func() {
 		var colors []externalColor
@@ -504,11 +486,20 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 		}
 	})
 
+	rotateGridBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ViewRefreshIcon()).Resource, func() {
+		switch view.device.LightType {
+		case device.LightTypeMatrix:
+			view.grids[view.activeGrid].Rotate(RotateClockwise)
+		case device.LightTypeMultiZone:
+			// TODO
+		}
+	})
+
 	imageOpenBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.FolderOpenIcon()).Resource, func() {
 		parseImage(view)
 	})
 
-	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, undoBtn, clearGridBtn, imageOpenBtn)
+	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, undoBtn, clearGridBtn, rotateGridBtn, imageOpenBtn)
 }
 
 func newButtonGrid(buttons ...*widget.Button) *fyne.Container {
