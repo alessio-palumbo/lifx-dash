@@ -25,7 +25,8 @@ type ZoneGrid struct {
 	Rows  int
 	Cols  int
 	Cells []*ZoneCell
-	// Store is size N*N where N = max(Rows, Cols)
+	// Store is a square, padded workspace, of N = max(Rows, Cols),
+	// used ONLY for rotation / mirroring.
 	Store []*ZoneCell
 	// Extent is the side length of the square rotation space.
 	// It is always max(Rows, Cols) and guarantees lossless rotation
@@ -114,37 +115,38 @@ func (z *ZoneGrid) DragEnd() {
 }
 
 func (z *ZoneGrid) Rotate(dir Rotation) {
-	center := float64(z.Extent-1) / 2
-	next := make([]*ZoneCell, z.Extent*z.Extent)
+	z.applyStoreTransform(func() {
+		center := float64(z.Extent-1) / 2
+		next := make([]*ZoneCell, z.Extent*z.Extent)
 
-	for r := range z.Extent {
-		for c := range z.Extent {
-			cell := z.Store[z.storeIndex(r, c)]
-			if cell == nil {
-				continue
-			}
+		for r := range z.Extent {
+			for c := range z.Extent {
+				cell := z.Store[z.storeIndex(r, c)]
+				if cell == nil {
+					continue
+				}
 
-			x := float64(c) - center
-			y := float64(r) - center
+				x := float64(c) - center
+				y := float64(r) - center
 
-			var nx, ny float64
-			if dir == RotateClockwise {
-				nx, ny = -y, x
-			} else {
-				nx, ny = y, -x
-			}
+				var nx, ny float64
+				if dir == RotateClockwise {
+					nx, ny = -y, x
+				} else {
+					nx, ny = y, -x
+				}
 
-			nc := int(math.Round(nx + center))
-			nr := int(math.Round(ny + center))
+				nc := int(math.Round(nx + center))
+				nr := int(math.Round(ny + center))
 
-			if nr >= 0 && nr < z.Extent && nc >= 0 && nc < z.Extent {
-				next[z.storeIndex(nr, nc)] = cell
+				if nr >= 0 && nr < z.Extent && nc >= 0 && nc < z.Extent {
+					next[z.storeIndex(nr, nc)] = cell
+				}
 			}
 		}
-	}
 
-	z.Store = next
-	z.projectToGrid()
+		z.Store = next
+	})
 }
 
 func (z *ZoneGrid) Reverse() {
@@ -156,10 +158,17 @@ func (z *ZoneGrid) Reverse() {
 	})
 }
 
+// applyCellTransform applies a transform function that preserves grid shape.
 func (z *ZoneGrid) applyCellTransform(fn func([]*ZoneCell)) {
 	fn(z.Cells)
 	z.buildGrid()
 	z.Refresh()
+}
+
+// applyStoreTransform applies a transform function that operates on Store (rotation, mirroring)
+func (z *ZoneGrid) applyStoreTransform(fn func()) {
+	fn()
+	z.projectToGrid()
 }
 
 func (z *ZoneGrid) projectToGrid() {
