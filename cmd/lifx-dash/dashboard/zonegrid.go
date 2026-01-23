@@ -147,6 +147,21 @@ func (z *ZoneGrid) Rotate(dir Rotation) {
 	z.projectToGrid()
 }
 
+func (z *ZoneGrid) Reverse() {
+	z.applyCellTransform(func(c []*ZoneCell) {
+		for i := 0; i < len(c)/2; i++ {
+			j := len(c) - 1 - i
+			c[i], c[j] = c[j], c[i]
+		}
+	})
+}
+
+func (z *ZoneGrid) applyCellTransform(fn func([]*ZoneCell)) {
+	fn(z.Cells)
+	z.buildGrid()
+	z.Refresh()
+}
+
 func (z *ZoneGrid) projectToGrid() {
 	rowOff, colOff := z.storeOffset()
 

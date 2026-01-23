@@ -18,7 +18,7 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-const defaultImageBrightnessRatio = 0.7
+const defaultImageBrightnessRatio = 0.5
 
 func parseImage(view *deviceView) {
 	d := dialog.NewFileOpen(

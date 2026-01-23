@@ -491,7 +491,7 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 		case device.LightTypeMatrix:
 			view.grids[view.activeGrid].Rotate(RotateClockwise)
 		case device.LightTypeMultiZone:
-			// TODO
+			view.grids[view.activeGrid].Reverse()
 		}
 	})
 
