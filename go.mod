@@ -7,6 +7,7 @@ require (
 	github.com/alessio-palumbo/lifxlan-go v0.2.20-0.20251216235727-caec12bad82f
 	github.com/alessio-palumbo/lifxprotocol-go v0.2.0
 	github.com/disintegration/imaging v1.6.2
+	golang.org/x/image v0.24.0
 )
 
 require (
@@ -39,7 +40,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
