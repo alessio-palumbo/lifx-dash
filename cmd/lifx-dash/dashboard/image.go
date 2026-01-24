@@ -134,9 +134,13 @@ func snakeFlatten(grid []device.Color, w, h int) []device.Color {
 }
 
 func nrgbaToColor(c color.NRGBA) device.Color {
-	r := float64(c.R) / 255.0
-	g := float64(c.G) / 255.0
-	b := float64(c.B) / 255.0
+	return rgbToColor(c.R, c.G, c.B)
+}
+
+func rgbToColor(cr, cg, cb uint8) device.Color {
+	r := float64(cr) / 255.0
+	g := float64(cg) / 255.0
+	b := float64(cb) / 255.0
 
 	max := math.Max(r, math.Max(g, b))
 	min := math.Min(r, math.Min(g, b))

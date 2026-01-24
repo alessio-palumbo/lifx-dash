@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,6 +19,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/messages"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 	"github.com/alessio-palumbo/lifxprotocol-go/gen/protocol/packets"
 )
 
@@ -49,10 +51,13 @@ type deviceView struct {
 	internalColor *device.Color
 	// zoneSelectionColor defaults to -1 for any unselected field allowing
 	// changing only brightness or saturation or hue for the selected cells.
-	zoneSelectionColor *device.Color
-	grids              []*ZoneGrid
-	activeGrid         int
-	freezeUntil        time.Time
+	zoneSelectionColor    *device.Color
+	zoneSetPackets        func(i int, colors []packets.LightHsbk) []*protocol.Message
+	selectedEffect        *EffectDescriptor
+	selectedEffectStopper *atomic.Bool
+	grids                 []*ZoneGrid
+	activeGrid            int
+	freezeUntil           time.Time
 }
 
 func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *deviceView {
@@ -200,43 +205,32 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				modalContent.Add(withTopMargin(container.NewCenter(tileSelector), 10))
 			}
 
+			view.zoneSetPackets = func(i int, colors []packets.LightHsbk) []*protocol.Message {
+				return messages.SetMatrixColorsFromSlice(i, 1, d.MatrixProperties.Width, colors, time.Millisecond)
+			}
+
 			applyBtn := widget.NewButton("Apply Zones",
 				func() {
 					// Prevent brightness-only updates triggered by the device last update.
 					// The brightness in this case is set in the individual pixels, so it does not
 					// correspond to the general brightness of the device.
 					view.freezeUpdates()
-
-					for i, g := range view.grids {
-						colors := make([]packets.LightHsbk, len(g.Cells))
-						for j, c := range g.Cells {
-							colors[j] = c.HSBK()
-						}
-						for _, m := range messages.SetMatrixColorsFromSlice(i, 1, d.MatrixProperties.Width, colors, time.Millisecond) {
-							ctrl.Send(d.Serial, m)
-						}
-					}
+					view.applyZones(ctrl)
 				},
 			)
 
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
+			effectBtn := newEffectButton(ctrl, view)
+			modalContent.Add(withTopMargin(effectBtn, 10))
+
 		case device.LightTypeMultiZone:
 			grid := NewZoneGrid(view, d.MultizoneProperties.Zones, 8)
 			view.grids = []*ZoneGrid{grid}
-			applyBtn := widget.NewButton("Apply Zones",
-				func() {
-					colors := make([]packets.LightHsbk, len(grid.Cells))
-					for i, c := range grid.Cells {
-						colors[i] = c.HSBK()
-					}
-
-					msgs := messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
-					for _, msg := range msgs {
-						ctrl.Send(d.Serial, msg)
-					}
-				},
-			)
+			view.zoneSetPackets = func(i int, colors []packets.LightHsbk) []*protocol.Message {
+				return messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
+			}
+			applyBtn := widget.NewButton("Apply Zones", func() { view.applyZones(ctrl) })
 
 			modalContent.Add(withTopMargin(grid, 30))
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
@@ -255,6 +249,80 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 	view.content = container.NewPadded(container.NewVBox(statusLabel, brightnessSlider, NewHItemWithSideLabel(toggleBtn, view.settingsBtn)))
 	return view
+}
+
+func (v *deviceView) applyZones(ctrl Controller) {
+	for i, g := range v.grids {
+		colors := make([]packets.LightHsbk, len(g.Cells))
+		for j, c := range g.Cells {
+			colors[j] = c.HSBK()
+		}
+		for _, m := range v.zoneSetPackets(i, colors) {
+			ctrl.Send(v.device.Serial, m)
+		}
+	}
+}
+
+func newEffectButton(ctrl Controller, view *deviceView) *widget.Button {
+	return widget.NewButtonWithIcon("", widget.NewIcon(theme.VisibilityIcon()).Resource, func() {
+		effects := availableEffectsForDevice(view.device)
+		var params any
+		paramsBox := container.NewVBox()
+		selectBtn := widget.NewSelect(effectLabels(effects), func(label string) {
+			view.selectedEffect = new(EffectDescriptor)
+			*view.selectedEffect = effectByLabel[label]
+			params = view.selectedEffect.NewParams()
+			paramsBox.Objects = nil
+			if view.selectedEffect.ParamsUI != nil {
+				if ui := view.selectedEffect.ParamsUI(view.parentWin, params); ui != nil {
+					paramsBox.Add(widget.NewLabelWithStyle("Parameters", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
+					paramsBox.Add(ui)
+				}
+			}
+			paramsBox.Refresh()
+		})
+		if view.selectedEffect != nil {
+			selectBtn.SetSelected(view.selectedEffect.Label)
+		}
+
+		sendFunc := func(msg *protocol.Message) error {
+			return ctrl.Send(view.device.Serial, msg)
+		}
+		playBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaPlayIcon()).Resource, func() {
+			if view.selectedEffect != nil {
+				// Make sure any running effect is stopped and its goroutine released.
+				if view.selectedEffectStopper != nil {
+					view.selectedEffect.Stop(view.selectedEffectStopper)
+				}
+				view.selectedEffectStopper = view.selectedEffect.Play(sendFunc, view.device, params)
+			}
+		})
+
+		stopBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaStopIcon()).Resource, func() {
+			if view.selectedEffect != nil {
+				view.selectedEffect.Stop(view.selectedEffectStopper)
+				view.applyZones(ctrl)
+			}
+		})
+		content := container.NewVBox(
+			container.NewCenter(widget.NewLabelWithStyle("Effect", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})),
+			selectBtn,
+
+			widget.NewSeparator(),
+
+			paramsBox,
+
+			withTopMargin(container.NewCenter(container.NewHBox(
+				playBtn,
+				stopBtn,
+			)), 10),
+		)
+
+		effectModal := dialog.NewCustom("", "Close", container.NewPadded(content), view.parentWin)
+		effectModal.Resize(fyne.NewSize(350, 400))
+		effectModal.Show()
+
+	})
 }
 
 func (v *deviceView) LastUpdatedAt() time.Time {
