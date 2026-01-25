@@ -221,8 +221,10 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
-			effectBtn := newEffectButton(ctrl, view)
-			modalContent.Add(withTopMargin(effectBtn, 10))
+			if effects := availableEffectsForDevice(view.device); len(effects) > 0 {
+				effectBtn := newEffectButton(ctrl, view, effects)
+				modalContent.Add(withTopMargin(effectBtn, 10))
+			}
 
 		case device.LightTypeMultiZone:
 			grid := NewZoneGrid(view, d.MultizoneProperties.Zones, 8)
@@ -263,9 +265,8 @@ func (v *deviceView) applyZones(ctrl Controller) {
 	}
 }
 
-func newEffectButton(ctrl Controller, view *deviceView) *widget.Button {
+func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescriptor) *widget.Button {
 	return widget.NewButtonWithIcon("", widget.NewIcon(theme.VisibilityIcon()).Resource, func() {
-		effects := availableEffectsForDevice(view.device)
 		var params any
 		paramsBox := container.NewVBox()
 		selectBtn := widget.NewSelect(effectLabels(effects), func(label string) {
@@ -283,6 +284,8 @@ func newEffectButton(ctrl Controller, view *deviceView) *widget.Button {
 		})
 		if view.selectedEffect != nil {
 			selectBtn.SetSelected(view.selectedEffect.Label)
+		} else if len(effects) > 0 {
+			selectBtn.SetSelected(effects[0].Label)
 		}
 
 		sendFunc := func(msg *protocol.Message) error {
