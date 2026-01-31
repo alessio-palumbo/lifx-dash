@@ -34,17 +34,27 @@ var effectByLabel = map[string]EffectDescriptor{
 }
 
 const (
+	chainModeSequential = "sequential"
+	chainModeSynced     = "synced"
+)
+
+var chainModes = map[string]matrix.ChainMode{
+	chainModeSequential: matrix.ChainModeSequential,
+	chainModeSynced:     matrix.ChainModeSynced,
+}
+
+const (
 	directionInwards  = "inwards"
 	directionOutwards = "outwards"
 	directionInOut    = "in-out"
 	directionOutIn    = "out-in"
 )
 
-var animationDirections = map[string]int{
-	directionInwards:  int(matrix.AnimationDirectionInwards),
-	directionOutwards: int(matrix.AnimationDirectionOutwards),
-	directionInOut:    int(matrix.AnimationDirectionInOut),
-	directionOutIn:    int(matrix.AnimationDirectionOutIn),
+var animationDirections = map[string]matrix.AnimationDirection{
+	directionInwards:  matrix.AnimationDirectionInwards,
+	directionOutwards: matrix.AnimationDirectionOutwards,
+	directionInOut:    matrix.AnimationDirectionInOut,
+	directionOutIn:    matrix.AnimationDirectionOutIn,
 }
 
 type SendFunc = func(msg *protocol.Message) error
@@ -69,15 +79,16 @@ type EffectDescriptor struct {
 	Stop func(stop *atomic.Bool)
 
 	// UI
-	ParamsUI func(parentWindow fyne.Window, params any) fyne.CanvasObject
+	ParamsUI func(view *deviceView, params any) fyne.CanvasObject
 }
 
 type MatrixEffectParams struct {
 	SendIntervalMs int64
+	ChainMode      matrix.ChainMode
 	Brightness     float64
 	Colors         []color.RGBA
 	Size           int
-	Direction      int
+	Direction      matrix.AnimationDirection
 }
 
 var EffectMatrixWaterfall = EffectDescriptor{
@@ -100,7 +111,7 @@ var EffectMatrixWaterfall = EffectDescriptor{
 			return nil
 		}
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			matrix.Waterfall(m, wrappedSender, p.SendIntervalMs, 0, 0, colors...)
+			matrix.Waterfall(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, colors...)
 		})
 	},
 
@@ -110,7 +121,7 @@ var EffectMatrixWaterfall = EffectDescriptor{
 		}
 	},
 
-	ParamsUI: func(parentWindow fyne.Window, params any) fyne.CanvasObject {
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
 		p := params.(*MatrixEffectParams)
 		intervalSlider := NewSliderWithEntry("%.0f", 50, 500, 50, float64(p.SendIntervalMs), func(v float64) error {
 			p.SendIntervalMs = int64(v)
@@ -121,9 +132,11 @@ var EffectMatrixWaterfall = EffectDescriptor{
 			return nil
 		})
 		return container.NewVBox(
-			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
-			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
-			LabelledSlider("Colors", modalLabelWidth, container.NewPadded(colorPalette(parentWindow, p.Colors))),
+			addChainModeIfSupported(view, p,
+				LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+				LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+				LabelledSlider("Colors", modalLabelWidth, colorPalette(view.parentWin, p.Colors)),
+			)...,
 		)
 	},
 }
@@ -148,7 +161,7 @@ var EffectMatrixRockets = EffectDescriptor{
 			return nil
 		}
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			matrix.Rockets(m, wrappedSender, p.SendIntervalMs, 0, 0, colors...)
+			matrix.Rockets(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, colors...)
 		})
 	},
 
@@ -158,7 +171,7 @@ var EffectMatrixRockets = EffectDescriptor{
 		}
 	},
 
-	ParamsUI: func(parentWindow fyne.Window, params any) fyne.CanvasObject {
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
 		p := params.(*MatrixEffectParams)
 		intervalSlider := NewSliderWithEntry("%.0f", 50, 500, 50, float64(p.SendIntervalMs), func(v float64) error {
 			p.SendIntervalMs = int64(v)
@@ -169,9 +182,11 @@ var EffectMatrixRockets = EffectDescriptor{
 			return nil
 		})
 		return container.NewVBox(
-			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
-			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
-			LabelledSlider("Colors", modalLabelWidth, container.NewPadded(colorPalette(parentWindow, p.Colors))),
+			addChainModeIfSupported(view, p,
+				LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+				LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+				LabelledSlider("Colors", modalLabelWidth, colorPalette(view.parentWin, p.Colors)),
+			)...,
 		)
 	},
 }
@@ -197,7 +212,7 @@ var EffectMatrixWorm = EffectDescriptor{
 			return nil
 		}
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			matrix.Worm(m, wrappedSender, p.SendIntervalMs, 0, 0, p.Size, colors[0])
+			matrix.Worm(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Size, colors[0])
 		})
 	},
 
@@ -207,7 +222,7 @@ var EffectMatrixWorm = EffectDescriptor{
 		}
 	},
 
-	ParamsUI: func(parentWindow fyne.Window, params any) fyne.CanvasObject {
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
 		p := params.(*MatrixEffectParams)
 		intervalSlider := NewSliderWithEntry("%.0f", 50, 500, 50, float64(p.SendIntervalMs), func(v float64) error {
 			p.SendIntervalMs = int64(v)
@@ -222,10 +237,12 @@ var EffectMatrixWorm = EffectDescriptor{
 			return nil
 		})
 		return container.NewVBox(
-			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
-			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
-			LabelledSlider("Color", modalLabelWidth, container.NewPadded(colorPalette(parentWindow, p.Colors))),
-			LabelledSlider("Size", modalLabelWidth, sizeSlider),
+			addChainModeIfSupported(view, p,
+				LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+				LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+				LabelledSlider("Color", modalLabelWidth, colorPalette(view.parentWin, p.Colors)),
+				LabelledSlider("Size", modalLabelWidth, sizeSlider),
+			)...,
 		)
 	},
 }
@@ -251,7 +268,7 @@ var EffectMatrixSnake = EffectDescriptor{
 			return nil
 		}
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			matrix.Snake(m, wrappedSender, p.SendIntervalMs, 0, 0, p.Size, colors[0])
+			matrix.Snake(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Size, colors[0])
 		})
 	},
 
@@ -261,7 +278,7 @@ var EffectMatrixSnake = EffectDescriptor{
 		}
 	},
 
-	ParamsUI: func(parentWindow fyne.Window, params any) fyne.CanvasObject {
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
 		p := params.(*MatrixEffectParams)
 		intervalSlider := NewSliderWithEntry("%.0f", 50, 500, 50, float64(p.SendIntervalMs), func(v float64) error {
 			p.SendIntervalMs = int64(v)
@@ -276,10 +293,12 @@ var EffectMatrixSnake = EffectDescriptor{
 			return nil
 		})
 		return container.NewVBox(
-			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
-			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
-			LabelledSlider("Color", modalLabelWidth, container.NewPadded(colorPalette(parentWindow, p.Colors))),
-			LabelledSlider("Size", modalLabelWidth, sizeSlider),
+			addChainModeIfSupported(view, p,
+				LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+				LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+				LabelledSlider("Color", modalLabelWidth, colorPalette(view.parentWin, p.Colors)),
+				LabelledSlider("Size", modalLabelWidth, sizeSlider),
+			)...,
 		)
 	},
 }
@@ -304,8 +323,7 @@ var EffectMatrixConcentric = EffectDescriptor{
 			color = &colors[0]
 		}
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			direction := matrix.ParseAnimationDirection(p.Direction)
-			matrix.ConcentricFrames(m, wrappedSender, p.SendIntervalMs, 0, 0, direction, color)
+			matrix.ConcentricFrames(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Direction, color)
 		})
 	},
 
@@ -315,7 +333,7 @@ var EffectMatrixConcentric = EffectDescriptor{
 		}
 	},
 
-	ParamsUI: func(parentWindow fyne.Window, params any) fyne.CanvasObject {
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
 		p := params.(*MatrixEffectParams)
 		intervalSlider := NewSliderWithEntry("%.0f", 50, 500, 50, float64(p.SendIntervalMs), func(v float64) error {
 			p.SendIntervalMs = int64(v)
@@ -331,10 +349,12 @@ var EffectMatrixConcentric = EffectDescriptor{
 			}
 		})
 		return container.NewVBox(
-			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
-			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
-			LabelledSlider("Color", modalLabelWidth, container.NewPadded(colorPalette(parentWindow, p.Colors))),
-			LabelledSlider("Direction", modalLabelWidth, container.NewPadded(directionSelector)),
+			addChainModeIfSupported(view, p,
+				LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+				LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+				LabelledSlider("Color", modalLabelWidth, colorPalette(view.parentWin, p.Colors)),
+				LabelledSlider("Direction", modalLabelWidth, container.NewStack(directionSelector)),
+			)...,
 		)
 	},
 }
@@ -393,7 +413,7 @@ func colorPalette(parentWindow fyne.Window, cc []color.RGBA) *fyne.Container {
 			picker.Show()
 		}))
 	}
-	return colorCircles
+	return container.NewPadded(colorCircles)
 }
 
 func newColorsParam(n int, initial ...color.RGBA) []color.RGBA {
@@ -430,4 +450,17 @@ func effectLabels(effects []EffectDescriptor) []string {
 		labels[i] = e.Label
 	}
 	return labels
+}
+
+func addChainModeIfSupported(view *deviceView, p *MatrixEffectParams, objects ...fyne.CanvasObject) []fyne.CanvasObject {
+	if view.device.LightType == device.LightTypeMatrix && view.device.MatrixProperties.ChainLength > 1 {
+		chainModeSelector := selectFromLabels([]string{chainModeSynced, chainModeSequential}, chainModeSynced, func(selected string) {
+			if v, ok := chainModes[selected]; ok {
+				p.ChainMode = v
+			}
+		})
+		objects = append(objects, LabelledSlider("ChainMode", modalLabelWidth, container.NewStack(chainModeSelector)))
+
+	}
+	return objects
 }

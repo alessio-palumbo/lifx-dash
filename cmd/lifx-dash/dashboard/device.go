@@ -29,7 +29,7 @@ const (
 	gridGamma         = 2.2
 
 	freezeUpdatesDuration = 2 * time.Second
-	modalLabelWidth       = 80
+	modalLabelWidth       = 90
 
 	unsetColorValue = -1
 )
@@ -275,7 +275,7 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 			params = view.selectedEffect.NewParams()
 			paramsBox.Objects = nil
 			if view.selectedEffect.ParamsUI != nil {
-				if ui := view.selectedEffect.ParamsUI(view.parentWin, params); ui != nil {
+				if ui := view.selectedEffect.ParamsUI(view, params); ui != nil {
 					paramsBox.Add(widget.NewLabelWithStyle("Parameters", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
 					paramsBox.Add(ui)
 				}
