@@ -51,6 +51,40 @@ func NewSliderWithData(labelFmt string, min, max, step float64, v binding.Float,
 	return NewHItemWithSideLabel(slider, sliderLabel)
 }
 
+// NewSliderWithUIBinding returns a slider with a binding that only updates the UI
+// but does not trigger the sendFunc. This is useful to reflect external updates that
+// should not trigger a user action on the device.
+func NewSliderWithUIBinding(labelFmt string, min, max, step float64, v float64, uiBinding binding.Float, sendFunc func(v float64) error) *fyne.Container {
+	sliderLabel := widget.NewLabel(fmt.Sprintf(labelFmt, v))
+	slider := widget.NewSlider(min, max)
+	slider.Value = v
+	slider.Step = step
+
+	// Assign to a local variable to avoid closure capturing
+	cb := sendFunc
+	var suppressSend bool
+
+	if uiBinding != nil {
+		uiBinding.AddListener(binding.NewDataListener(func() {
+			v, _ := uiBinding.Get()
+			suppressSend = true
+			slider.SetValue(v)
+			suppressSend = false
+		}))
+	}
+
+	slider.OnChanged = func(value float64) {
+		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
+		if !suppressSend {
+			if err := cb(value); err != nil {
+				log.Println(err)
+			}
+		}
+	}
+
+	return NewHItemWithSideLabel(slider, sliderLabel)
+}
+
 func NewSliderWithEntry(labelFmt string, min, max, step, v float64, sendFunc func(v float64) error) *fyne.Container {
 	entry := NewEntry(50)
 	entry.SetText(fmt.Sprintf(labelFmt, v))

@@ -103,7 +103,7 @@ func (d *Dashboard) refreshDevices(force bool) {
 		for _, dev := range latest {
 			if view, ok := d.deviceWidgets[dev.Serial]; ok {
 				// Update widgets only if device state has changed
-				if !dev.LastUpdatedAt.Equal(view.LastUpdatedAt()) {
+				if dev.LastUpdatedAt.After(view.LastUpdatedAt()) {
 					view.Update(dev)
 				}
 			}

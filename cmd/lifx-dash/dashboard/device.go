@@ -28,7 +28,7 @@ const (
 	gridMaxBrightness = 100.0
 	gridGamma         = 2.2
 
-	freezeUpdatesDuration = 10 * time.Second
+	freezeUpdatesDuration = 2 * time.Second
 	modalLabelWidth       = 80
 
 	unsetColorValue = -1
@@ -90,7 +90,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		view.refreshUI()
 	})
 
-	brightnessSlider := NewSliderWithData("%.0f%%", 1, 100, 1, view.brightness, func(v float64) error {
+	brightnessSlider := NewSliderWithUIBinding("%.0f%%", 1, 100, 1, d.Color.Brightness, view.brightness, func(v float64) error {
 		view.freezeUpdates()
 		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
