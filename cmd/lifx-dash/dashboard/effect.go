@@ -312,18 +312,15 @@ var EffectMatrixConcentric = EffectDescriptor{
 		return &MatrixEffectParams{
 			SendIntervalMs: 200,
 			Brightness:     50,
-			Colors:         newColorsParam(1, defaultColor),
+			Colors:         newColorsParam(6, defaultColor),
 		}
 	},
 
 	Play: func(sender SendFunc, d *device.Device, params any) *atomic.Bool {
 		p := params.(*MatrixEffectParams)
-		var color *packets.LightHsbk
-		if colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness); len(colors) > 0 {
-			color = &colors[0]
-		}
+		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
-			matrix.ConcentricFrames(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Direction, color)
+			matrix.ConcentricFrames(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Direction, colors...)
 		})
 	},
 
