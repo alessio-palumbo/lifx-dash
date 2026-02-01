@@ -215,7 +215,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 					// The brightness in this case is set in the individual pixels, so it does not
 					// correspond to the general brightness of the device.
 					view.freezeUpdates()
-					view.applyZones(ctrl)
+					view.applyZones(ctrl, view.grids)
 				},
 			)
 
@@ -232,7 +232,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			view.zoneSetPackets = func(i int, colors []packets.LightHsbk) []*protocol.Message {
 				return messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
 			}
-			applyBtn := widget.NewButton("Apply Zones", func() { view.applyZones(ctrl) })
+			applyBtn := widget.NewButton("Apply Zones", func() { view.applyZones(ctrl, view.grids) })
 
 			modalContent.Add(withTopMargin(grid, 30))
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
@@ -253,8 +253,8 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	return view
 }
 
-func (v *deviceView) applyZones(ctrl Controller) {
-	for i, g := range v.grids {
+func (v *deviceView) applyZones(ctrl Controller, grids []*ZoneGrid) {
+	for i, g := range grids {
 		colors := make([]packets.LightHsbk, len(g.Cells))
 		for j, c := range g.Cells {
 			colors[j] = c.HSBK()
@@ -291,6 +291,7 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 		sendFunc := func(msg *protocol.Message) error {
 			return ctrl.Send(view.device.Serial, msg)
 		}
+		gridsBackup := view.grids
 		playBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaPlayIcon()).Resource, func() {
 			if view.selectedEffect != nil {
 				// Make sure any running effect is stopped and its goroutine released.
@@ -304,7 +305,7 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 		stopBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaStopIcon()).Resource, func() {
 			if view.selectedEffect != nil {
 				view.selectedEffect.Stop(view.selectedEffectStopper)
-				view.applyZones(ctrl)
+				view.applyZones(ctrl, gridsBackup)
 			}
 		})
 		content := container.NewVBox(
