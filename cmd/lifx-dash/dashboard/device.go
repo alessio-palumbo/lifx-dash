@@ -7,7 +7,6 @@ import (
 	"log"
 	"math"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -54,7 +53,7 @@ type deviceView struct {
 	zoneSelectionColor    *device.Color
 	zoneSetPackets        func(i int, colors []packets.LightHsbk) []*protocol.Message
 	selectedEffect        *EffectDescriptor
-	selectedEffectStopper *atomic.Bool
+	selectedEffectStopper func()
 	grids                 []*ZoneGrid
 	activeGrid            int
 	freezeUntil           time.Time
@@ -221,11 +220,6 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 
-			if effects := availableEffectsForDevice(view.device); len(effects) > 0 {
-				effectBtn := newEffectButton(ctrl, view, effects)
-				modalContent.Add(withTopMargin(effectBtn, 10))
-			}
-
 		case device.LightTypeMultiZone:
 			grid := NewZoneGrid(view, d.MultizoneProperties.Zones, 8)
 			view.grids = []*ZoneGrid{grid}
@@ -236,6 +230,11 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 			modalContent.Add(withTopMargin(grid, 30))
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
+		}
+
+		if effects := availableEffectsForDevice(view.device); len(effects) > 0 {
+			effectBtn := newEffectButton(ctrl, view, effects)
+			modalContent.Add(withTopBottomMargin(effectBtn, 10))
 		}
 
 		d := dialog.NewCustom("", "Close", container.NewPadded(modalContent), parentWin)
@@ -293,20 +292,25 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 		}
 		gridsBackup := view.grids
 		playBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaPlayIcon()).Resource, func() {
+			view.mu.Lock()
 			if view.selectedEffect != nil {
 				// Make sure any running effect is stopped and its goroutine released.
 				if view.selectedEffectStopper != nil {
-					view.selectedEffect.Stop(view.selectedEffectStopper)
+					view.selectedEffectStopper()
 				}
 				view.selectedEffectStopper = view.selectedEffect.Play(sendFunc, view.device, params)
 			}
+			view.mu.Unlock()
 		})
 
 		stopBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaStopIcon()).Resource, func() {
-			if view.selectedEffect != nil {
-				view.selectedEffect.Stop(view.selectedEffectStopper)
+			view.mu.Lock()
+			if view.selectedEffect != nil && view.selectedEffectStopper != nil {
+				view.selectedEffectStopper()
+				view.selectedEffectStopper = nil
 				view.applyZones(ctrl, gridsBackup)
 			}
+			view.mu.Unlock()
 		})
 		content := container.NewVBox(
 			container.NewCenter(widget.NewLabelWithStyle("Effect", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})),
@@ -581,8 +585,15 @@ func newButtonGrid(buttons ...*widget.Button) *fyne.Container {
 	}
 	return grid
 }
+
 func withTopMargin(content fyne.CanvasObject, px float32) fyne.CanvasObject {
 	pad := canvas.NewRectangle(color.Transparent)
 	pad.SetMinSize(fyne.NewSize(1, px))
 	return container.NewBorder(pad, nil, nil, nil, content)
+}
+
+func withTopBottomMargin(content fyne.CanvasObject, px float32) fyne.CanvasObject {
+	pad := canvas.NewRectangle(color.Transparent)
+	pad.SetMinSize(fyne.NewSize(1, px))
+	return container.NewBorder(pad, pad, nil, nil, content)
 }
