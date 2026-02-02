@@ -35,6 +35,8 @@ const (
 
 var emptyLightState = packets.LightHsbk{}
 
+type SendFunc = func(msg *protocol.Message) error
+
 type deviceView struct {
 	content   *fyne.Container
 	label     *StatusLabel
@@ -45,6 +47,8 @@ type deviceView struct {
 	lightCircle *canvas.Circle
 
 	settingsBtn *widget.Button
+
+	sendMsg SendFunc
 
 	mu            sync.RWMutex
 	internalColor *device.Color
@@ -68,6 +72,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 		internalColor:      &device.Color{},
 		zoneSelectionColor: &device.Color{Hue: unsetColorValue, Saturation: unsetColorValue, Brightness: unsetColorValue},
 		brightness:         binding.NewFloat(),
+		sendMsg:            func(msg *protocol.Message) error { return ctrl.Send(d.Serial, msg) },
 	}
 	*view.internalColor = d.Color
 	view.brightness.Set(d.Color.Brightness)
@@ -78,7 +83,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	}
 
 	toggleBtn := widget.NewButton("Toggle", func() {
-		if err := toggle(ctrl, view.device); err != nil {
+		if err := toggle(view); err != nil {
 			log.Println(err)
 			return
 		}
@@ -91,7 +96,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 	brightnessSlider := NewSliderWithUIBinding("%.0f%%", 1, 100, 1, d.Color.Brightness, view.brightness, func(v float64) error {
 		view.freezeUpdates()
-		return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
+		return view.sendMsg(messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 	})
 
 	view.settingsBtn = widget.NewButtonWithIcon("", widget.NewIcon(theme.ColorPaletteIcon()).Resource, func() {
@@ -104,7 +109,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				if view.updateIfSelectedCells() {
 					return nil
 				}
-				return ctrl.Send(d.Serial, messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
+				return view.sendMsg(messages.SetColor(&v, nil, nil, nil, time.Millisecond, 0))
 			})
 			sliders.Add(LabelledSlider("Hue", modalLabelWidth, hue))
 
@@ -115,7 +120,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 				if view.updateIfSelectedCells() {
 					return nil
 				}
-				return ctrl.Send(d.Serial, messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
+				return view.sendMsg(messages.SetColor(nil, &v, nil, nil, time.Millisecond, 0))
 			})
 			sliders.Add(LabelledSlider("Saturation", modalLabelWidth, sat))
 		}
@@ -127,7 +132,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			if view.updateIfSelectedCells() {
 				return nil
 			}
-			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
+			return view.sendMsg(messages.SetColor(nil, nil, &v, nil, time.Millisecond, 0))
 		})
 		sliders.Add(LabelledSlider("Brightness", modalLabelWidth, bri))
 
@@ -145,7 +150,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			if view.updateIfSelectedCells() {
 				return nil
 			}
-			return ctrl.Send(d.Serial, messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
+			return view.sendMsg(messages.SetColor(nil, nil, nil, &k, time.Millisecond, 0))
 		})
 		sliders.Add(LabelledSlider("Kelvin", modalLabelWidth, kelvin))
 
@@ -214,7 +219,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 					// The brightness in this case is set in the individual pixels, so it does not
 					// correspond to the general brightness of the device.
 					view.freezeUpdates()
-					view.applyZones(ctrl, view.grids)
+					view.applyZones(view, view.grids)
 				},
 			)
 
@@ -226,14 +231,14 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			view.zoneSetPackets = func(i int, colors []packets.LightHsbk) []*protocol.Message {
 				return messages.SetMultizoneExtendedColors(0, colors, time.Millisecond)
 			}
-			applyBtn := widget.NewButton("Apply Zones", func() { view.applyZones(ctrl, view.grids) })
+			applyBtn := widget.NewButton("Apply Zones", func() { view.applyZones(view, view.grids) })
 
 			modalContent.Add(withTopMargin(grid, 30))
 			modalContent.Add(withTopMargin(NewHItemWithSideLabel(applyBtn, newGridActionsButtons(view)), 10))
 		}
 
 		if effects := availableEffectsForDevice(view.device); len(effects) > 0 {
-			effectBtn := newEffectButton(ctrl, view, effects)
+			effectBtn := newEffectButton(view, effects)
 			modalContent.Add(withTopBottomMargin(effectBtn, 10))
 		}
 
@@ -252,19 +257,19 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 	return view
 }
 
-func (v *deviceView) applyZones(ctrl Controller, grids []*ZoneGrid) {
+func (v *deviceView) applyZones(view *deviceView, grids []*ZoneGrid) {
 	for i, g := range grids {
 		colors := make([]packets.LightHsbk, len(g.Cells))
 		for j, c := range g.Cells {
 			colors[j] = c.HSBK()
 		}
 		for _, m := range v.zoneSetPackets(i, colors) {
-			ctrl.Send(v.device.Serial, m)
+			view.sendMsg(m)
 		}
 	}
 }
 
-func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescriptor) *widget.Button {
+func newEffectButton(view *deviceView, effects []EffectDescriptor) *widget.Button {
 	return widget.NewButtonWithIcon("", widget.NewIcon(theme.VisibilityIcon()).Resource, func() {
 		var params any
 		paramsBox := container.NewVBox()
@@ -287,9 +292,6 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 			selectBtn.SetSelected(effects[0].Label)
 		}
 
-		sendFunc := func(msg *protocol.Message) error {
-			return ctrl.Send(view.device.Serial, msg)
-		}
 		gridsBackup := view.grids
 		playBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.MediaPlayIcon()).Resource, func() {
 			view.mu.Lock()
@@ -298,7 +300,7 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 				if view.selectedEffectStopper != nil {
 					view.selectedEffectStopper()
 				}
-				view.selectedEffectStopper = view.selectedEffect.Play(sendFunc, view.device, params)
+				view.selectedEffectStopper = view.selectedEffect.Play(view, params)
 			}
 			view.mu.Unlock()
 		})
@@ -308,7 +310,7 @@ func newEffectButton(ctrl Controller, view *deviceView, effects []EffectDescript
 			if view.selectedEffect != nil && view.selectedEffectStopper != nil {
 				view.selectedEffectStopper()
 				view.selectedEffectStopper = nil
-				view.applyZones(ctrl, gridsBackup)
+				view.applyZones(view, gridsBackup)
 			}
 			view.mu.Unlock()
 		})
@@ -467,11 +469,11 @@ func updateColorFromZoneSelectionColor(c, sc *device.Color) device.Color {
 	return updated
 }
 
-func toggle(ctrl Controller, d *device.Device) error {
-	if d.PoweredOn {
-		return ctrl.Send(d.Serial, messages.SetPowerOff())
+func toggle(view *deviceView) error {
+	if view.device.PoweredOn {
+		return view.sendMsg(messages.SetPowerOff())
 	}
-	return ctrl.Send(d.Serial, messages.SetPowerOn())
+	return view.sendMsg(messages.SetPowerOn())
 }
 
 func deviceColorToRGBA(d *device.Device) color.RGBA {

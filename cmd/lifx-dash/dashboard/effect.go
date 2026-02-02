@@ -92,8 +92,6 @@ var moveDirections = map[string]bool{
 	moveDirectionBackward: false,
 }
 
-type SendFunc = func(msg *protocol.Message) error
-
 type EffectKind int
 
 const (
@@ -111,7 +109,7 @@ type EffectDescriptor struct {
 	NewParams func() any
 
 	// Apply effect
-	Play func(sender SendFunc, d *device.Device, params any) (stopFunc func())
+	Play func(view *deviceView, params any) (stopFunc func())
 
 	// UI
 	ParamsUI func(view *deviceView, params any) fyne.CanvasObject
@@ -139,10 +137,10 @@ var EffectMatrixConcentric = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
-		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
+		return startMatrixEffect(view, func(m *matrix.Matrix, wrappedSender SendFunc) {
 			matrix.ConcentricFrames(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Direction, colors...)
 		})
 	},
@@ -186,13 +184,13 @@ var EffectMatrixWaterfall = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		if len(colors) == 0 {
 			return nil
 		}
-		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
+		return startMatrixEffect(view, func(m *matrix.Matrix, wrappedSender SendFunc) {
 			matrix.Waterfall(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, colors...)
 		})
 	},
@@ -230,13 +228,13 @@ var EffectMatrixRockets = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		if len(colors) == 0 {
 			return nil
 		}
-		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
+		return startMatrixEffect(view, func(m *matrix.Matrix, wrappedSender SendFunc) {
 			matrix.Rockets(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, colors...)
 		})
 	},
@@ -275,13 +273,13 @@ var EffectMatrixWorm = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		if len(colors) == 0 {
 			return nil
 		}
-		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
+		return startMatrixEffect(view, func(m *matrix.Matrix, wrappedSender SendFunc) {
 			matrix.Worm(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Size, colors[0])
 		})
 	},
@@ -325,13 +323,13 @@ var EffectMatrixSnake = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		if len(colors) == 0 {
 			return nil
 		}
-		return startMatrixEffect(sender, d, func(m *matrix.Matrix, wrappedSender SendFunc) {
+		return startMatrixEffect(view, func(m *matrix.Matrix, wrappedSender SendFunc) {
 			matrix.Snake(m, wrappedSender, p.SendIntervalMs, 0, p.ChainMode, p.Size, colors[0])
 		})
 	},
@@ -385,9 +383,9 @@ var FWEffectMatrixFlame = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
-		return startMatrixFWEffect(sender, messages.SetMatrixFlameEffect(time.Duration(p.SpeedS)*time.Second))
+		return startMatrixFWEffect(view.sendMsg, messages.SetMatrixFlameEffect(time.Duration(p.SpeedS)*time.Second))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -415,13 +413,13 @@ var FWEffectMatrixMorph = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
 		colors := selectedColorsToLightHSBK(p.Colors, &p.Brightness)
 		if len(colors) > 16 {
 			colors = colors[:16]
 		}
-		return startMatrixFWEffect(sender, messages.SetMatrixMorphEffect(time.Duration(p.SpeedS)*time.Second, colors...))
+		return startMatrixFWEffect(view.sendMsg, messages.SetMatrixMorphEffect(time.Duration(p.SpeedS)*time.Second, colors...))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -455,9 +453,9 @@ var FWEffectMatrixClouds = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
-		return startMatrixFWEffect(sender, messages.SetMatrixCloudsEffect(time.Duration(p.SpeedS)*time.Second, &p.MinSaturation))
+		return startMatrixFWEffect(view.sendMsg, messages.SetMatrixCloudsEffect(time.Duration(p.SpeedS)*time.Second, &p.MinSaturation))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -489,10 +487,10 @@ var FWEffectMatrixSunrise = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
 		speed := time.Duration(p.SpeedM) * time.Minute
-		return startMatrixFWEffect(sender, messages.SetMatrixSunriseEffect(&speed))
+		return startMatrixFWEffect(view.sendMsg, messages.SetMatrixSunriseEffect(&speed))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -519,10 +517,10 @@ var FWEffectMatrixSunset = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
 		speed := time.Duration(p.SpeedM) * time.Minute
-		return startMatrixFWEffect(sender, messages.SetMatrixSunsetEffect(&speed, true))
+		return startMatrixFWEffect(view.sendMsg, messages.SetMatrixSunsetEffect(&speed, true))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -548,10 +546,10 @@ var FWEffectMultizoneMove = EffectDescriptor{
 		}
 	},
 
-	Play: func(sender SendFunc, d *device.Device, params any) func() {
+	Play: func(view *deviceView, params any) func() {
 		p := params.(*MatrixFWEffectParams)
 		speed := time.Duration(p.SpeedS) * time.Second
-		return startMZFWEffect(sender, messages.SetMultizoneMoveEffect(speed, p.MoveDirection))
+		return startMZFWEffect(view.sendMsg, messages.SetMultizoneMoveEffect(speed, p.MoveDirection))
 	},
 
 	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
@@ -572,9 +570,10 @@ var FWEffectMultizoneMove = EffectDescriptor{
 	},
 }
 
-func startMatrixEffect(send SendFunc, d *device.Device, f func(m *matrix.Matrix, wrappedSender SendFunc)) (stopFunc func()) {
-	m := matrix.New(int(d.MatrixProperties.Width), int(d.MatrixProperties.Height), int(d.MatrixProperties.ChainLength))
-	sender, stopped := matrix.SendWithStop(send)
+func startMatrixEffect(view *deviceView, f func(m *matrix.Matrix, wrappedSender SendFunc)) (stopFunc func()) {
+	props := view.device.MatrixProperties
+	m := matrix.New(int(props.Width), int(props.Height), int(props.ChainLength))
+	sender, stopped := matrix.SendWithStop(view.sendMsg)
 	go func() {
 		f(m, sender)
 		stopped.Store(true)
