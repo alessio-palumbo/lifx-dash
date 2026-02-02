@@ -398,16 +398,22 @@ func (v *deviceView) getInternalColor() device.Color {
 	return *v.internalColor
 }
 
+func (v *deviceView) setInternalColor(f func(*device.Color)) {
+	v.mu.Lock()
+	f(v.internalColor)
+	f(v.zoneSelectionColor)
+	v.mu.Unlock()
+}
+
 func (v *deviceView) getZoneSelectionColor() device.Color {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return *v.zoneSelectionColor
 }
 
-func (v *deviceView) setInternalColor(f func(*device.Color)) {
+func (v *deviceView) resetZoneSelectionColor() {
 	v.mu.Lock()
-	f(v.internalColor)
-	f(v.zoneSelectionColor)
+	*v.zoneSelectionColor = device.Color{Hue: unsetColorValue, Saturation: unsetColorValue, Brightness: unsetColorValue}
 	v.mu.Unlock()
 }
 
@@ -536,6 +542,7 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 				c.ClearSelection()
 			}
 		}
+		view.resetZoneSelectionColor()
 	})
 
 	clearSelectedBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.CancelIcon()).Resource, func() {
@@ -544,6 +551,7 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 				c.ClearSelection()
 			}
 		}
+		view.resetZoneSelectionColor()
 	})
 
 	undoBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.ContentUndoIcon()).Resource, func() {
