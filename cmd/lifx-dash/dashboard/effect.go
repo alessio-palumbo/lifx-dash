@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/matrix"
@@ -34,6 +37,8 @@ var allEffects = []EffectDescriptor{
 	EffectMatrixWorm,
 	EffectMatrixSnake,
 
+	EffectBufferedAnimation,
+
 	FWEffectMatrixFlame,
 	FWEffectMatrixMorph,
 	FWEffectMatrixClouds,
@@ -49,6 +54,7 @@ var effectByLabel = map[string]EffectDescriptor{
 	"Rockets":           EffectMatrixRockets,
 	"Worm":              EffectMatrixWorm,
 	"Snake":             EffectMatrixSnake,
+	"Animation":         EffectBufferedAnimation,
 	"Flame":             FWEffectMatrixFlame,
 	"Morph":             FWEffectMatrixMorph,
 	"Clouds":            FWEffectMatrixClouds,
@@ -362,11 +368,14 @@ var EffectMatrixSnake = EffectDescriptor{
 // Firmware Effects
 
 type MatrixFWEffectParams struct {
-	SpeedM        int64
-	SpeedS        int64
-	SpeedMs       int64
-	Brightness    float64
-	Colors        []color.RGBA
+	SpeedM     int64
+	SpeedS     int64
+	SpeedMs    int64
+	Brightness float64
+	Colors     []color.RGBA
+	Frames     [][]packets.LightHsbk
+
+	// FW Params
 	MinSaturation uint32
 	SoftOff       bool
 	MoveDirection bool
@@ -568,6 +577,165 @@ var FWEffectMultizoneMove = EffectDescriptor{
 			LabelledSlider("Direction", modalLabelWidth, container.NewStack(moveDirection)),
 		)
 	},
+}
+
+var EffectBufferedAnimation = EffectDescriptor{
+	ID:          "buffered_animation",
+	Label:       "Animation",
+	SupportedOn: EffectMatrix,
+
+	NewParams: func() any {
+		return &MatrixFWEffectParams{
+			SpeedMs:    200,
+			Brightness: 50,
+			// TODO make this dynamic once supported_frame_buffers field is exposed in the protocol.
+			Frames: make([][]packets.LightHsbk, 5),
+		}
+	},
+
+	Play: func(view *deviceView, params any) func() {
+		p := params.(*MatrixFWEffectParams)
+		var frames [][]packets.LightHsbk
+		for _, f := range p.Frames {
+			if f != nil {
+				frames = append(frames, f)
+			}
+		}
+		msgs, nextFrame := messages.SetMatrixFrameAnimation(view.activeGrid, 1, view.device.MatrixProperties.Width, frames, p.Brightness, 0)
+		for _, msg := range msgs {
+			view.sendMsg(msg)
+		}
+
+		done := make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(time.Duration(p.SpeedMs) * time.Millisecond)
+			for {
+				select {
+				case <-ticker.C:
+					view.sendMsg(nextFrame())
+				case <-done:
+					return
+				}
+			}
+		}()
+
+		return func() {
+			close(done)
+		}
+	},
+
+	ParamsUI: func(view *deviceView, params any) fyne.CanvasObject {
+		p := params.(*MatrixFWEffectParams)
+		intervalSlider := NewSliderWithEntry("%.0f", 50, 5000, 50, float64(p.SpeedMs), func(v float64) error {
+			p.SpeedMs = int64(v)
+			return nil
+		})
+		brightnessSlider := NewSliderWithEntry("%.0f", 1, 100, 1, p.Brightness, func(v float64) error {
+			p.Brightness = v
+			return nil
+		})
+
+		vbox := container.NewVBox(
+			LabelledSlider("Speed Ms", modalLabelWidth, intervalSlider),
+			LabelledSlider("Brightness", modalLabelWidth, brightnessSlider),
+		)
+
+		frameBox := container.NewVBox()
+		frameList := NewDynamicList[*FrameItem](frameBox, len(p.Frames))
+
+		addFrameBtn := widget.NewButton("Add Frame", nil)
+		addFrameBtn.OnTapped = func() {
+			frame := newFrame(frameList, addFrameBtn, view, p.Frames)
+			if frameList.Add(frame) {
+				addFrameBtn.Disable()
+			}
+		}
+		frameList.OnChange = func(items []*FrameItem) {
+			for i, f := range items {
+				f.Label.SetText(fmt.Sprintf("Frame %d/%d", i+1, len(p.Frames)))
+			}
+
+			if frameList.IsFull() {
+				addFrameBtn.SetText("Max frames reached")
+				addFrameBtn.Disable()
+				return
+			}
+
+			addFrameBtn.SetText("Add Frame")
+			if hasEmptyFrame(p.Frames, len(items)) {
+				addFrameBtn.Disable()
+				return
+			}
+			addFrameBtn.Enable()
+		}
+
+		return container.NewVBox(
+			vbox,
+			frameBox,
+			container.NewBorder(nil, nil, nil, nil, addFrameBtn),
+		)
+	},
+}
+
+type FrameItem struct {
+	Container *fyne.Container
+	Label     *widget.Label
+}
+
+func (f *FrameItem) CanvasObject() fyne.CanvasObject {
+	return f.Container
+}
+
+func hasEmptyFrame(frames [][]packets.LightHsbk, count int) bool {
+	for i := range count {
+		if frames[i] == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func newFrame(list *DynamicList[*FrameItem], addFrameBtn *widget.Button, view *deviceView, frames [][]packets.LightHsbk) *FrameItem {
+	thumbnail := NewThumbnail(nil, canvas.ImageFillStretch, 80, 30)
+	obj := new(FrameItem)
+
+	frameBtn := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
+		index := list.IndexOf(obj)
+		if index < 0 {
+			return
+		}
+
+		ParseImage(view, func(grid []device.Color, img image.Image) {
+			frame := make([]packets.LightHsbk, len(grid))
+			for j, c := range grid {
+				frame[j] = c.ToDeviceColor()
+			}
+
+			frames[index] = frame
+			thumbnail.SetImage(img)
+
+			// allow adding another frame once this one has data
+			if !list.IsFull() {
+				addFrameBtn.Enable()
+			}
+		})
+	})
+
+	clearBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		index := list.IndexOf(obj)
+		if index < 0 {
+			return
+		}
+
+		// shift slice data
+		copy(frames[index:], frames[index+1:])
+		frames[len(frames)-1] = nil
+		list.Remove(obj)
+	})
+
+	frameContainer := container.NewBorder(nil, nil, container.NewStack(frameBtn, thumbnail.Image), clearBtn, nil)
+	obj.Label, obj.Container = LabelledSliderWithLabel("", modalLabelWidth, frameContainer)
+	return obj
 }
 
 func startMatrixEffect(view *deviceView, f func(m *matrix.Matrix, wrappedSender SendFunc)) (stopFunc func()) {

@@ -3,6 +3,7 @@ package dashboard
 import (
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"math"
@@ -582,7 +583,14 @@ func newGridActionsButtons(view *deviceView) *fyne.Container {
 	})
 
 	imageOpenBtn := widget.NewButtonWithIcon("", widget.NewIcon(theme.FolderOpenIcon()).Resource, func() {
-		parseImage(view)
+		ParseImage(view, func(grid []device.Color, img image.Image) {
+			for i, c := range view.grids[view.activeGrid].Cells {
+				color := &grid[i]
+				// Set brightness to a lower ratio for better ux.
+				color.Brightness = color.Brightness * defaultImageBrightnessRatio
+				c.SetColor(color)
+			}
+		})
 	})
 
 	return newButtonGrid(copyBtn, confirmSelectedBtn, clearSelectedBtn, undoBtn, clearGridBtn, rotateGridBtn, imageOpenBtn)

@@ -128,9 +128,19 @@ func NewHItemWithSideLabel(item, label fyne.CanvasObject) *fyne.Container {
 	return container.NewBorder(nil, nil, nil, label, item)
 }
 
+func LabelledSliderWithLabel(label string, labelWidth int, slider *fyne.Container) (*widget.Label, *fyne.Container) {
+	return labelledSlider(label, labelWidth, slider)
+}
+
 func LabelledSlider(label string, labelWidth int, slider *fyne.Container) *fyne.Container {
-	fixedWidthLabel := container.NewGridWrap(fyne.NewSize(float32(labelWidth), 0), widget.NewLabel(label))
-	return container.NewBorder(
+	_, s := labelledSlider(label, labelWidth, slider)
+	return s
+}
+
+func labelledSlider(label string, labelWidth int, slider *fyne.Container) (*widget.Label, *fyne.Container) {
+	l := widget.NewLabel(label)
+	fixedWidthLabel := container.NewGridWrap(fyne.NewSize(float32(labelWidth), 0), l)
+	return l, container.NewBorder(
 		nil, nil,
 		fixedWidthLabel, nil,
 		slider,

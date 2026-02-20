@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
@@ -20,7 +21,23 @@ import (
 
 const defaultImageBrightnessRatio = 0.5
 
-func parseImage(view *deviceView) {
+type Thumbnail struct {
+	*canvas.Image
+}
+
+func NewThumbnail(img image.Image, fillmode canvas.ImageFill, minW, minH float32) *Thumbnail {
+	i := canvas.NewImageFromImage(img)
+	i.FillMode = fillmode
+	i.SetMinSize(fyne.NewSize(minW, minH))
+	return &Thumbnail{i}
+}
+
+func (t *Thumbnail) SetImage(img image.Image) {
+	t.Image.Image = img
+	t.Refresh()
+}
+
+func ParseImage(view *deviceView, cb func(grid []device.Color, img image.Image)) {
 	d := dialog.NewFileOpen(
 		func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
@@ -49,14 +66,7 @@ func parseImage(view *deviceView) {
 				return
 			}
 
-			for _, g := range view.grids {
-				for i, c := range g.Cells {
-					color := &grid[i]
-					// Set brightness to a lower ratio for better ux.
-					color.Brightness = color.Brightness * defaultImageBrightnessRatio
-					c.SetColor(color)
-				}
-			}
+			cb(grid, img)
 		},
 		view.parentWin,
 	)
@@ -177,6 +187,6 @@ func rgbToColor(cr, cg, cb uint8) device.Color {
 		Hue:        hue,
 		Saturation: saturation,
 		Brightness: brightness,
-		Kelvin:     6500, // sensible default for grayscale
+		Kelvin:     5000, // sensible default for grayscale
 	}
 }
