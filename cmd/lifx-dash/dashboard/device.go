@@ -176,6 +176,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			for i := range d.MatrixProperties.ChainZones {
 				zones := make([]packets.LightHsbk, d.MatrixProperties.NZones)
 				copy(zones, d.MatrixProperties.ChainZones[i])
+				zones = adjustUIGridForOrientation(d.MatrixProperties.Width, d.MatrixProperties.Height, d.MatrixProperties.ChainOrientations[i], zones)
 				view.grids[i] = NewZoneGrid(view, zones, d.MatrixProperties.Width)
 			}
 
@@ -211,6 +212,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 			}
 
 			view.zoneSetPackets = func(i int, colors []packets.LightHsbk) []*protocol.Message {
+				colors = rotateMatrixForOrientation(i, view.device.MatrixProperties, colors)
 				return messages.SetMatrixColorsFromSlice(i, 1, d.MatrixProperties.Width, colors, time.Millisecond)
 			}
 
@@ -614,4 +616,24 @@ func withTopBottomMargin(content fyne.CanvasObject, px float32) fyne.CanvasObjec
 	pad := canvas.NewRectangle(color.Transparent)
 	pad.SetMinSize(fyne.NewSize(1, px))
 	return container.NewBorder(pad, pad, nil, nil, content)
+}
+
+// rotateMatrixForOrientation reorient the matrix colors to match device Orientation.
+func rotateMatrixForOrientation(tileIndex int, props device.MatrixProperties, colors []packets.LightHsbk) []packets.LightHsbk {
+	return device.ReorientMatrix(props.Width, props.Height, props.ChainOrientations[tileIndex], colors)
+}
+
+// adjustUIGridForOrientation reorient the matrix colors so they show correctly in the UI grid
+// taking in consideration the Orientation of the device and making sure the matrix 0,0 shows
+// as the top-left corner, even when tilted.
+func adjustUIGridForOrientation(w, h int, o device.Orientation, zones []packets.LightHsbk) []packets.LightHsbk {
+	switch o {
+	case device.OrientationRight:
+		return device.RotateMatrix(device.RotateMatrix90(w, h), zones)
+	case device.OrientationUpsideDown:
+		return device.RotateMatrix(device.RotateMatrix180(w, h), zones)
+	case device.OrientationLeft:
+		return device.RotateMatrix(device.RotateMatrix270(w, h), zones)
+	}
+	return zones
 }

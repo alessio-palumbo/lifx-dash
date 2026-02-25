@@ -598,7 +598,7 @@ var EffectBufferedAnimation = EffectDescriptor{
 		var frames [][]packets.LightHsbk
 		for _, f := range p.Frames {
 			if f != nil {
-				frames = append(frames, f)
+				frames = append(frames, rotateMatrixForOrientation(view.activeGrid, view.device.MatrixProperties, f))
 			}
 		}
 		msgs, nextFrame := messages.SetMatrixFrameAnimation(view.activeGrid, 1, view.device.MatrixProperties.Width, frames, p.Brightness, 0)
