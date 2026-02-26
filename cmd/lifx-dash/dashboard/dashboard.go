@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"image/color"
+	"log"
 	"slices"
 	"strings"
 	"time"
@@ -9,9 +10,11 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/alessio-palumbo/lifxlan-go/pkg/command"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 	"github.com/alessio-palumbo/lifxlan-go/pkg/protocol"
 )
@@ -157,7 +160,8 @@ func (d *Dashboard) build(devices []device.Device) (fyne.CanvasObject, map[devic
 	}
 
 	scrollable := container.NewVScroll(container.NewVBox(sections...))
-	return container.NewBorder(newSearchBar(d.searchEntry), nil, nil, nil, scrollable), deviceWidgets
+	topBar := newSearchBar(d.searchEntry, widget.NewButton("Prompt", func() { d.openPromptModal() }))
+	return container.NewBorder(topBar, nil, nil, nil, scrollable), deviceWidgets
 }
 
 func (d *Dashboard) filteredDevices(devices []device.Device) []device.Device {
@@ -175,6 +179,31 @@ func (d *Dashboard) filteredDevices(devices []device.Device) []device.Device {
 		}
 	}
 	return out
+}
+
+func (d *Dashboard) openPromptModal() {
+	cmdParser := command.NewCommandParser(d.devices)
+	sender := func(s device.Serial, msg *protocol.Message) {
+		log.Printf("sending msg %d to serial %s\n", msg.Type(), s)
+		if err := d.ctrl.Send(s, msg); err != nil {
+			log.Printf("errors sending msg %d to serial %s\n", msg.Type(), s)
+		}
+	}
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder("What would you like to do?")
+	entry.OnSubmitted = func(text string) {
+		cmds := cmdParser.Parse(entry.Text)
+		for _, cmd := range cmds {
+			cmd.ForEachSend(sender)
+		}
+		entry.SetText("")
+	}
+
+	modal := dialog.NewCustom("", "Close", container.NewPadded(entry), d.win)
+	modal.Resize(fyne.NewSize(500, 150))
+	modal.Show()
+
+	d.win.Canvas().Focus(entry)
 }
 
 func groupDevices(devices []device.Device) (map[string][]device.Device, []string) {
@@ -196,7 +225,7 @@ func groupDevices(devices []device.Device) (map[string][]device.Device, []string
 	return groups, sortedGroups
 }
 
-func newSearchBar(entry *widget.Entry) fyne.CanvasObject {
+func newSearchBar(entry *widget.Entry, prompt *widget.Button) fyne.CanvasObject {
 	var icon fyne.Resource
 	if len(entry.Text) == 0 {
 		icon = theme.SearchIcon()
@@ -214,7 +243,7 @@ func newSearchBar(entry *widget.Entry) fyne.CanvasObject {
 	search := container.NewBorder(
 		layout.NewSpacer(),
 		layout.NewSpacer(),
-		iconContainer, nil,
+		iconContainer, prompt,
 		entry,
 	)
 
