@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -871,13 +871,13 @@ func addChainModeIfSupported(view *deviceView, p *MatrixEffectParams, objects ..
 func requiresMinVersion(fwVersion string, maj, min int) bool {
 	parts := strings.Split(fwVersion, ".")
 	if len(parts) != 2 {
-		log.Println("Unexpected fwVersion", fwVersion)
+		slog.Warn("Unexpected fwVersion", slog.String("version", fwVersion))
 		return false
 	}
 
 	majV, err := strconv.Atoi(parts[0])
 	if err != nil {
-		log.Println("Error parsing major version:", err)
+		slog.Error("Error parsing major version", slog.String("error", err.Error()), slog.String("maj_version", parts[0]))
 		return false
 	}
 	if majV < maj {
@@ -886,7 +886,7 @@ func requiresMinVersion(fwVersion string, maj, min int) bool {
 
 	minV, err := strconv.Atoi(parts[1])
 	if err != nil {
-		log.Println("Error parsing minor version:", err)
+		slog.Error("Error parsing minor version", slog.String("error", err.Error()), slog.String("min_version", parts[0]))
 		return false
 	}
 	return minV >= min

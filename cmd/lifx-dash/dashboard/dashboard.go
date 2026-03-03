@@ -2,7 +2,7 @@ package dashboard
 
 import (
 	"image/color"
-	"log"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -184,9 +184,9 @@ func (d *Dashboard) filteredDevices(devices []device.Device) []device.Device {
 func (d *Dashboard) openPromptModal() {
 	cmdParser := command.NewCommandParser(d.devices)
 	sender := func(s device.Serial, msg *protocol.Message) {
-		log.Printf("sending msg %d to serial %s\n", msg.Type(), s)
+		slog.Debug("prompt: sending message", slog.String("serial", s.String()), slog.Uint64("payload", uint64(msg.Type())))
 		if err := d.ctrl.Send(s, msg); err != nil {
-			log.Printf("errors sending msg %d to serial %s\n", msg.Type(), s)
+			slog.Error("prompt: error sending message", slog.String("serial", s.String()), slog.Uint64("payload", uint64(msg.Type())))
 		}
 	}
 	entry := widget.NewEntry()

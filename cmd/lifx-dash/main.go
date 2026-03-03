@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -13,6 +15,10 @@ import (
 )
 
 func main() {
+	if os.Getenv("LOG_LEVEL") == "debug" {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
+
 	a := app.New()
 	a.Settings()
 	w := a.NewWindow("LIFX Dash")

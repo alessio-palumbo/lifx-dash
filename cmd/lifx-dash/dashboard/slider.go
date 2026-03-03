@@ -2,7 +2,7 @@ package dashboard
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -23,7 +23,7 @@ func NewSlider(labelFmt string, min, max, step, v float64, sendFunc func(v float
 	slider.OnChanged = func(value float64) {
 		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
 		if err := cb(value); err != nil {
-			log.Println(err)
+			slog.Error("slider on changed error", slog.String("error", err.Error()), slog.Float64("value", value))
 		}
 	}
 
@@ -44,7 +44,7 @@ func NewSliderWithData(labelFmt string, min, max, step float64, v binding.Float,
 	slider.OnChanged = func(value float64) {
 		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
 		if err := cb(value); err != nil {
-			log.Println(err)
+			slog.Error("slider on changed error", slog.String("error", err.Error()), slog.Float64("value", value))
 		}
 	}
 
@@ -77,7 +77,7 @@ func NewSliderWithUIBinding(labelFmt string, min, max, step float64, v float64, 
 		sliderLabel.SetText(fmt.Sprintf(labelFmt, value))
 		if !suppressSend {
 			if err := cb(value); err != nil {
-				log.Println(err)
+				slog.Error("slider on changed error", slog.String("error", err.Error()), slog.Float64("value", value))
 			}
 		}
 	}
@@ -100,7 +100,7 @@ func NewSliderWithEntry(labelFmt string, min, max, step, v float64, sendFunc fun
 	slider.OnChanged = func(value float64) {
 		entry.SetText(fmt.Sprintf(labelFmt, value))
 		if err := cb(value); err != nil {
-			log.Println(err)
+			slog.Error("slider on changed error", slog.String("error", err.Error()), slog.Float64("value", value))
 		}
 	}
 

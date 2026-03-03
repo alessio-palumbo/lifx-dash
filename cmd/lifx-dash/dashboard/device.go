@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
@@ -85,7 +85,7 @@ func newDeviceView(parentWin fyne.Window, ctrl Controller, d *device.Device) *de
 
 	toggleBtn := widget.NewButton("Toggle", func() {
 		if err := toggle(view); err != nil {
-			log.Println(err)
+			slog.Error("Toggle error", slog.String("error", err.Error()), slog.String("serial", view.device.Serial.String()))
 			return
 		}
 
