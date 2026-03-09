@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	fyne.io/fyne/v2 v2.6.3
-	github.com/alessio-palumbo/lifxlan-go v0.3.5
+	github.com/alessio-palumbo/lifxlan-go v0.3.6
 	github.com/alessio-palumbo/lifxprotocol-go v0.3.0
 	github.com/disintegration/imaging v1.6.2
 	golang.org/x/image v0.24.0

@@ -12,6 +12,25 @@ import (
 	"github.com/alessio-palumbo/lifxlan-go/pkg/device"
 )
 
+type TapLabel struct {
+	widget.Label
+
+	OnTap func()
+}
+
+func NewTapLabel(onTap func()) *TapLabel {
+	l := &TapLabel{OnTap: onTap}
+	l.ExtendBaseWidget(l)
+	l.Truncation = fyne.TextTruncateEllipsis
+	return l
+}
+
+func (l *TapLabel) Tapped(_ *fyne.PointEvent) {
+	if l.OnTap != nil {
+		l.OnTap()
+	}
+}
+
 // StatusLabel combines a label with a colored status circle and tooltip
 type StatusLabel struct {
 	widget.BaseWidget

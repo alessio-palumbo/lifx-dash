@@ -10,7 +10,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -189,21 +188,17 @@ func (d *Dashboard) openPromptModal() {
 			slog.Error("prompt: error sending message", slog.String("serial", s.String()), slog.Uint64("payload", uint64(msg.Type())))
 		}
 	}
-	entry := widget.NewEntry()
-	entry.SetPlaceHolder("What would you like to do?")
-	entry.OnSubmitted = func(text string) {
-		cmds := cmdParser.Parse(entry.Text)
+
+	modal := NewAutoCompleteEntryDialog(d.win, "What would you like to do?", cmdParser.Match, func(fullText string) bool {
+		cmds := cmdParser.Parse(fullText)
 		for _, cmd := range cmds {
 			cmd.ForEachSend(sender)
 		}
-		entry.SetText("")
-	}
+		return len(cmds) > 0
+	})
 
-	modal := dialog.NewCustom("", "Close", container.NewPadded(entry), d.win)
 	modal.Resize(fyne.NewSize(500, 150))
 	modal.Show()
-
-	d.win.Canvas().Focus(entry)
 }
 
 func groupDevices(devices []device.Device) (map[string][]device.Device, []string) {
