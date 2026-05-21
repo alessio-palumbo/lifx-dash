@@ -27,6 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gcc \
             xorg-dev \
             libx11-dev \
             libgl1-mesa-dev \
@@ -46,6 +47,9 @@ jobs:
           echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
       - name: Build and package Linux
+        env:
+          CGO_ENABLED: "1"
+          CGO_CPPFLAGS: "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2"
         run: |
           export GOFLAGS="-ldflags=-s -w \
             -ldflags=-X=github.com/alessio-palumbo/lifx-dash/internal/version.Version=$VERSION \
