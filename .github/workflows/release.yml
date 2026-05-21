@@ -76,7 +76,7 @@ jobs:
           fi
 
       - name: Upload Linux binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lifx-dash-linux-${{ matrix.arch == 'x86_64' && 'amd64' || matrix.arch }}
           path: dist/*
@@ -130,7 +130,7 @@ jobs:
           fi
 
       - name: Upload macOS binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lifx-dash-darwin-${{ matrix.arch == 'x86_64' && 'amd64' || matrix.arch }}
           path: dist/*
@@ -177,7 +177,7 @@ jobs:
           Remove-Item Env:GOFLAGS
 
       - name: Upload Windows binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lifx-dash-windows-amd64
           path: dist/*
