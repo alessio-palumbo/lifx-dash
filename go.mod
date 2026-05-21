@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	fyne.io/fyne/v2 v2.6.3
-	github.com/alessio-palumbo/lifxlan-go v0.3.6
+	github.com/alessio-palumbo/lifxlan-go v0.3.7
 	github.com/alessio-palumbo/lifxprotocol-go v0.3.0
 	github.com/disintegration/imaging v1.6.2
 	golang.org/x/image v0.24.0
@@ -13,7 +13,7 @@ require (
 require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/alessio-palumbo/lifxregistry-go v0.2.0 // indirect
+	github.com/alessio-palumbo/lifxregistry-go v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
